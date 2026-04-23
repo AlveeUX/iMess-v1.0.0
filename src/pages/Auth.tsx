@@ -111,7 +111,7 @@ const Auth = () => {
           </button>
         </div>
         <p className="mt-4 text-xs text-center text-muted-foreground">
-          The first account becomes the admin.
+          The first account becomes the admin. After that, only emails approved by an admin can sign up.
         </p>
       </Card>
     </div>
