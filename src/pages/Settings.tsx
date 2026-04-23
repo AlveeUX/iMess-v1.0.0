@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Lock, Unlock, ShieldCheck } from "lucide-react";
 import { fmtMoney } from "@/lib/mess";
+import { SignupAllowlist } from "@/components/SignupAllowlist";
 
 const Settings = () => {
   const { data, isLoading } = useMonthData();
@@ -99,6 +100,8 @@ const Settings = () => {
           <p className="text-sm text-muted-foreground italic">Only admin can close the month.</p>
         )}
       </Card>
+
+      {isAdmin && <SignupAllowlist />}
     </div>
   );
 };

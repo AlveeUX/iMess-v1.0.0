@@ -55,7 +55,12 @@ const Auth = () => {
         toast.success("Welcome back");
       }
     } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
+      const msg = err?.message || "Something went wrong";
+      if (/allowlist|restricted|Database error/i.test(msg)) {
+        toast.error("Sign-ups are restricted. Ask an admin to add your email to the allowlist.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setBusy(false);
     }
@@ -106,7 +111,7 @@ const Auth = () => {
           </button>
         </div>
         <p className="mt-4 text-xs text-center text-muted-foreground">
-          The first account becomes the admin.
+          The first account becomes the admin. After that, only emails approved by an admin can sign up.
         </p>
       </Card>
     </div>
