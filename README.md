@@ -289,7 +289,7 @@ MIT License
 
 ## 👨‍💻 Author
 
-Built as a real-world solution to eliminate mess calculation stress and improve transparency.
+TreeTech Studios
 
 ---
 
@@ -299,3 +299,5 @@ Built as a real-world solution to eliminate mess calculation stress and improve 
 > If people use it → the system becomes valuable
 
 iMess is designed to make **daily usage effortless**.
+
+© 2026 TreeTech Studios. All rights reserved.
