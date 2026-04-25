@@ -43,8 +43,14 @@ export const useMonthData = (date: Date = new Date()) => {
         supabase.from("months").select("*").eq("month", r.monthKey).maybeSingle(),
       ]);
 
+      const allExpenses = expenses.data ?? [];
+      const approvedExpenses = allExpenses.filter((e) => e.status === "approved");
+      const pendingExpenses = allExpenses.filter((e) => e.status === "pending");
+      const rejectedExpenses = allExpenses.filter((e) => e.status === "rejected");
+
       const totalMeals = (meals.data ?? []).reduce((s, m) => s + Number(m.meal_count), 0);
-      const totalExpense = (expenses.data ?? []).reduce((s, e) => s + Number(e.amount), 0);
+      const totalExpense = approvedExpenses.reduce((s, e) => s + Number(e.amount), 0);
+      const pendingTotal = pendingExpenses.reduce((s, e) => s + Number(e.amount), 0);
       const totalDeposits = (deposits.data ?? []).reduce((s, d) => s + Number(d.amount), 0);
       const isClosed = monthRow.data?.is_closed ?? false;
       const liveRate = computeRate(totalExpense, totalMeals);
@@ -71,17 +77,36 @@ export const useMonthData = (date: Date = new Date()) => {
         range: r,
         meals: meals.data ?? [],
         deposits: deposits.data ?? [],
-        expenses: expenses.data ?? [],
+        expenses: allExpenses,
+        approvedExpenses,
+        pendingExpenses,
+        rejectedExpenses,
         members: members.data ?? [],
         totalMeals,
         totalExpense,
+        pendingTotal,
         totalDeposits,
         rate,
         liveRate,
         isClosed,
         monthRow: monthRow.data,
         perMember,
+        pendingCount: pendingExpenses.length,
+        advanceBalance: perMember.reduce((s, m) => s + Math.max(0, m.balance), 0),
+        dueBalance: perMember.reduce((s, m) => s + Math.max(0, -m.balance), 0),
       };
     },
   });
 };
+
+export const useOpenCorrectionsCount = () =>
+  useQuery({
+    queryKey: ["corrections-open-count"],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("correction_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "open");
+      return count ?? 0;
+    },
+  });

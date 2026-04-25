@@ -1,0 +1,25 @@
+import { Badge } from "@/components/ui/badge";
+import { Shield, ShoppingBasket, User } from "lucide-react";
+import type { AppRole } from "@/hooks/useAuth";
+
+const meta: Record<AppRole, { label: string; icon: any; cls: string }> = {
+  admin: { label: "Admin", icon: Shield, cls: "bg-primary/15 text-primary border-primary/30" },
+  bazar_contributor: {
+    label: "Bazar Contributor",
+    icon: ShoppingBasket,
+    cls: "bg-warning/15 text-warning border-warning/30",
+  },
+  member: { label: "Member", icon: User, cls: "bg-secondary text-foreground/80 border-border" },
+};
+
+export const RoleBadge = ({ role }: { role: AppRole }) => {
+  const m = meta[role];
+  if (!m) return null;
+  const Icon = m.icon;
+  return (
+    <Badge variant="outline" className={`gap-1 ${m.cls}`}>
+      <Icon className="w-3 h-3" />
+      {m.label}
+    </Badge>
+  );
+};

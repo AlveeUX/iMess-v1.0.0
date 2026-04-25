@@ -4,82 +4,85 @@
 
 @layer base {
   :root {
-    /* Dark mode dashboard - rich slate with vibrant accents */
-    --background: 222 27% 8%;
-    --foreground: 210 20% 96%;
+    /* Premium SaaS dashboard — deep slate, blue primary */
+    --background: 222 30% 7%;
+    --foreground: 210 25% 97%;
 
-    --card: 222 24% 11%;
-    --card-foreground: 210 20% 96%;
+    --card: 222 26% 10%;
+    --card-foreground: 210 25% 97%;
 
-    --popover: 222 24% 11%;
-    --popover-foreground: 210 20% 96%;
+    --popover: 222 26% 10%;
+    --popover-foreground: 210 25% 97%;
 
-    --primary: 158 76% 52%;
-    --primary-foreground: 222 47% 8%;
-    --primary-glow: 158 90% 60%;
+    --primary: 221 83% 58%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 217 91% 65%;
 
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 210 20% 96%;
+    --secondary: 222 22% 15%;
+    --secondary-foreground: 210 25% 97%;
 
-    --muted: 222 18% 14%;
-    --muted-foreground: 215 14% 60%;
+    --muted: 222 20% 13%;
+    --muted-foreground: 215 16% 60%;
 
     --accent: 199 89% 60%;
     --accent-foreground: 222 47% 8%;
 
     --destructive: 0 75% 60%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive-foreground: 210 25% 98%;
 
     --warning: 38 92% 60%;
     --warning-foreground: 222 47% 8%;
 
-    --success: 158 76% 52%;
+    --success: 158 70% 48%;
     --success-foreground: 222 47% 8%;
+
+    --info: 199 89% 60%;
+    --info-foreground: 222 47% 8%;
 
     --border: 222 18% 18%;
     --input: 222 18% 16%;
-    --ring: 158 76% 52%;
+    --ring: 221 83% 58%;
 
     --radius: 0.75rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(158 76% 52%), hsl(199 89% 60%));
-    --gradient-card: linear-gradient(145deg, hsl(222 24% 12%), hsl(222 24% 10%));
-    --gradient-hero: radial-gradient(ellipse at top, hsl(158 76% 52% / 0.15), transparent 70%);
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 58%), hsl(199 89% 60%));
+    --gradient-card: linear-gradient(145deg, hsl(222 26% 11%), hsl(222 26% 9%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(221 83% 58% / 0.18), transparent 70%);
 
-    --shadow-glow: 0 0 40px hsl(158 76% 52% / 0.25);
+    --shadow-glow: 0 0 40px hsl(221 83% 58% / 0.28);
     --shadow-card: 0 4px 24px -4px hsl(222 47% 4% / 0.6);
     --shadow-elevated: 0 12px 40px -8px hsl(222 47% 4% / 0.8);
 
-    --sidebar-background: 222 30% 7%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 158 76% 52%;
-    --sidebar-primary-foreground: 222 47% 8%;
-    --sidebar-accent: 222 22% 13%;
-    --sidebar-accent-foreground: 210 20% 96%;
-    --sidebar-border: 222 18% 16%;
-    --sidebar-ring: 158 76% 52%;
+    --sidebar-background: 222 32% 6%;
+    --sidebar-foreground: 210 22% 90%;
+    --sidebar-primary: 221 83% 58%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 222 24% 12%;
+    --sidebar-accent-foreground: 210 25% 97%;
+    --sidebar-border: 222 18% 15%;
+    --sidebar-ring: 221 83% 58%;
   }
 
   .dark {
-    --background: 222 27% 8%;
-    --foreground: 210 20% 96%;
-    --card: 222 24% 11%;
-    --card-foreground: 210 20% 96%;
-    --popover: 222 24% 11%;
-    --popover-foreground: 210 20% 96%;
-    --primary: 158 76% 52%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 210 20% 96%;
-    --muted: 222 18% 14%;
-    --muted-foreground: 215 14% 60%;
+    --background: 222 30% 7%;
+    --foreground: 210 25% 97%;
+    --card: 222 26% 10%;
+    --card-foreground: 210 25% 97%;
+    --popover: 222 26% 10%;
+    --popover-foreground: 210 25% 97%;
+    --primary: 221 83% 58%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 22% 15%;
+    --secondary-foreground: 210 25% 97%;
+    --muted: 222 20% 13%;
+    --muted-foreground: 215 16% 60%;
     --accent: 199 89% 60%;
     --accent-foreground: 222 47% 8%;
     --destructive: 0 75% 60%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive-foreground: 210 25% 98%;
     --border: 222 18% 18%;
     --input: 222 18% 16%;
-    --ring: 158 76% 52%;
+    --ring: 221 83% 58%;
   }
 }
 
