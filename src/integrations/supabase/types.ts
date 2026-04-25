@@ -252,7 +252,7 @@ export type Database = {
       is_month_closed: { Args: { _date: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role: "admin" | "member" | "bazar_contributor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -380,7 +380,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: ["admin", "member", "bazar_contributor"],
     },
   },
 } as const
