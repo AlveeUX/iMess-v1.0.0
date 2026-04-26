@@ -384,6 +384,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_members_with_phone: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string
+          room: string
+        }[]
+      }
       current_member_id: { Args: never; Returns: string }
       has_role: {
         Args: {

@@ -8,7 +8,7 @@ export const useMembers = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("members")
-        .select("*")
+        .select("id, name, room, is_active, created_at")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -39,7 +39,7 @@ export const useMonthData = (date: Date = new Date()) => {
         supabase.from("meals").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("deposits").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("expenses").select("*").gte("date", r.start).lte("date", r.end),
-        supabase.from("members").select("*").order("name"),
+        supabase.from("members").select("id, name, room, is_active, created_at").order("name"),
         supabase.from("months").select("*").eq("month", r.monthKey).maybeSingle(),
       ]);
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMembers } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,21 @@ const Members = () => {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: "", phone: "", room: "" });
 
+  // Admins fetch phone numbers via a SECURITY DEFINER RPC; phones are not
+  // exposed via the regular members table to non-admins.
+  const { data: phoneRows } = useQuery({
+    queryKey: ["members-phones"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_list_members_with_phone");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const phoneById = new Map<string, string | null>(
+    (phoneRows ?? []).map((r: any) => [r.id, r.phone ?? null])
+  );
+
   const reset = () => {
     setForm({ name: "", phone: "", room: "" });
     setEditing(null);
@@ -46,7 +61,7 @@ const Members = () => {
 
   const openEdit = (m: any) => {
     setEditing(m);
-    setForm({ name: m.name, phone: m.phone ?? "", room: m.room ?? "" });
+    setForm({ name: m.name, phone: phoneById.get(m.id) ?? "", room: m.room ?? "" });
     setOpen(true);
   };
 
@@ -68,6 +83,7 @@ const Members = () => {
     if (error) return toast.error(error.message);
     toast.success(editing ? "Updated" : "Member added");
     qc.invalidateQueries({ queryKey: ["members"] });
+    qc.invalidateQueries({ queryKey: ["members-phones"] });
     qc.invalidateQueries({ queryKey: ["month-data"] });
     setOpen(false);
     reset();
@@ -88,6 +104,7 @@ const Members = () => {
     if (error) return toast.error(error.message);
     toast.success("Deleted");
     qc.invalidateQueries({ queryKey: ["members"] });
+    qc.invalidateQueries({ queryKey: ["members-phones"] });
     qc.invalidateQueries({ queryKey: ["month-data"] });
   };
 
@@ -151,7 +168,7 @@ const Members = () => {
                     {!m.is_active && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                    {m.phone && <div>{m.phone}</div>}
+                    {isAdmin && phoneById.get(m.id) && <div>{phoneById.get(m.id)}</div>}
                     {m.room && <div>Room {m.room}</div>}
                   </div>
                 </div>
