@@ -34,6 +34,21 @@ const Members = () => {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: "", phone: "", room: "" });
 
+  // Admins fetch phone numbers via a SECURITY DEFINER RPC; phones are not
+  // exposed via the regular members table to non-admins.
+  const { data: phoneRows } = useQuery({
+    queryKey: ["members-phones"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_list_members_with_phone");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const phoneById = new Map<string, string | null>(
+    (phoneRows ?? []).map((r: any) => [r.id, r.phone ?? null])
+  );
+
   const reset = () => {
     setForm({ name: "", phone: "", room: "" });
     setEditing(null);
@@ -46,7 +61,7 @@ const Members = () => {
 
   const openEdit = (m: any) => {
     setEditing(m);
-    setForm({ name: m.name, phone: m.phone ?? "", room: m.room ?? "" });
+    setForm({ name: m.name, phone: phoneById.get(m.id) ?? "", room: m.room ?? "" });
     setOpen(true);
   };
 
