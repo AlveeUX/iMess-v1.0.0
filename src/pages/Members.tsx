@@ -166,7 +166,7 @@ const Members = () => {
                     {!m.is_active && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                    {m.phone && <div>{m.phone}</div>}
+                    {isAdmin && phoneById.get(m.id) && <div>{phoneById.get(m.id)}</div>}
                     {m.room && <div>Room {m.room}</div>}
                   </div>
                 </div>
