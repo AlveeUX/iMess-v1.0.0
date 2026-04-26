@@ -104,6 +104,7 @@ const Members = () => {
     if (error) return toast.error(error.message);
     toast.success("Deleted");
     qc.invalidateQueries({ queryKey: ["members"] });
+    qc.invalidateQueries({ queryKey: ["members-phones"] });
     qc.invalidateQueries({ queryKey: ["month-data"] });
   };
 
