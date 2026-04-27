@@ -26,13 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { MessageSquareWarning, Plus, Check, X } from "lucide-react";
+import { MessageSquareWarning, Plus, Check, X, Zap } from "lucide-react";
 
-const schema = z.object({
-  entity_type: z.string().min(1),
-  reason: z.string().trim().min(5, "Please describe the issue (5+ chars)").max(500),
-  month: z.string().optional(),
-});
+type RequestKind = "meal" | "away" | "back" | "other";
 
 const statusMeta: Record<string, { cls: string; label: string }> = {
   open: { cls: "bg-warning/15 text-warning border-warning/30", label: "Open" },
@@ -41,15 +37,16 @@ const statusMeta: Record<string, { cls: string; label: string }> = {
 };
 
 const Corrections = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, memberId } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [reviewing, setReviewing] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [kind, setKind] = useState<RequestKind>("meal");
   const [form, setForm] = useState({
-    entity_type: "meals",
+    date: format(new Date(), "yyyy-MM-dd"),
+    meal_count: "1",
     reason: "",
-    month: format(new Date(), "yyyy-MM-01"),
   });
 
   const { data: rows, isLoading } = useQuery({
@@ -65,40 +62,116 @@ const Corrections = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = schema.safeParse(form);
-    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     if (!user) return toast.error("Sign in first");
+    if (kind !== "other" && !memberId) {
+      return toast.error("Your account isn't linked to a member yet. Ask an admin.");
+    }
+    if (form.reason.trim().length < 5) {
+      return toast.error("Please describe the reason (5+ chars)");
+    }
+
+    let entity_type = "other";
+    let requested_value: any = null;
+    let month: string | null = null;
+
+    if (kind === "meal") {
+      entity_type = "meals";
+      requested_value = {
+        member_id: memberId,
+        date: form.date,
+        meal_count: parseFloat(form.meal_count) || 0,
+      };
+      month = form.date.slice(0, 7) + "-01";
+    } else if (kind === "away") {
+      entity_type = "members";
+      requested_value = { member_id: memberId, is_active: false };
+    } else if (kind === "back") {
+      entity_type = "members";
+      requested_value = { member_id: memberId, is_active: true };
+    }
+
     const { error } = await supabase.from("correction_requests").insert({
       requested_by: user.id,
-      entity_type: form.entity_type,
-      month: form.month,
+      member_id: memberId,
+      entity_type,
+      month,
       reason: form.reason.trim(),
+      requested_value,
     });
     if (error) return toast.error(error.message);
     toast.success("Request sent to admin");
     qc.invalidateQueries({ queryKey: ["corrections"] });
     qc.invalidateQueries({ queryKey: ["corrections-open-count"] });
     setOpen(false);
-    setForm({ entity_type: "meals", reason: "", month: format(new Date(), "yyyy-MM-01") });
+    setForm({ date: format(new Date(), "yyyy-MM-dd"), meal_count: "1", reason: "" });
+    setKind("meal");
   };
 
-  const review = async (status: "approved" | "rejected") => {
+  const reject = async () => {
     if (!reviewing || !user) return;
     const { error } = await supabase
       .from("correction_requests")
       .update({
-        status,
+        status: "rejected",
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString(),
         review_note: reviewNote.trim() || null,
       })
       .eq("id", reviewing.id);
     if (error) return toast.error(error.message);
-    toast.success(`Request ${status}`);
+    toast.success("Request rejected");
     qc.invalidateQueries({ queryKey: ["corrections"] });
     qc.invalidateQueries({ queryKey: ["corrections-open-count"] });
     setReviewing(null);
     setReviewNote("");
+  };
+
+  const applyAuto = async () => {
+    if (!reviewing) return;
+    const { error } = await supabase.rpc("apply_correction", {
+      _request_id: reviewing.id,
+      _note: reviewNote.trim() || null,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Approved & applied");
+    qc.invalidateQueries({ queryKey: ["corrections"] });
+    qc.invalidateQueries({ queryKey: ["corrections-open-count"] });
+    qc.invalidateQueries({ queryKey: ["month-data"] });
+    qc.invalidateQueries({ queryKey: ["members"] });
+    setReviewing(null);
+    setReviewNote("");
+  };
+
+  const approveOnly = async () => {
+    if (!reviewing || !user) return;
+    const { error } = await supabase
+      .from("correction_requests")
+      .update({
+        status: "approved",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: reviewNote.trim() || null,
+      })
+      .eq("id", reviewing.id);
+    if (error) return toast.error(error.message);
+    toast.success("Marked approved (apply manually)");
+    qc.invalidateQueries({ queryKey: ["corrections"] });
+    qc.invalidateQueries({ queryKey: ["corrections-open-count"] });
+    setReviewing(null);
+    setReviewNote("");
+  };
+
+  const canAutoApply = (r: any) =>
+    r?.requested_value &&
+    ((r.entity_type === "meals" && r.requested_value.member_id && r.requested_value.date) ||
+      (r.entity_type === "members" && r.requested_value.member_id && typeof r.requested_value.is_active === "boolean"));
+
+  const summarize = (r: any) => {
+    const v = r.requested_value;
+    if (!v) return null;
+    if (r.entity_type === "meals") return `Set meals on ${v.date} → ${v.meal_count}`;
+    if (r.entity_type === "members") return v.is_active ? "Mark me active (back)" : "Mark me inactive (away)";
+    return null;
   };
 
   return (
@@ -109,9 +182,9 @@ const Corrections = () => {
             <MessageSquareWarning className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Correction Requests</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Requests</h1>
             <p className="text-muted-foreground mt-1">
-              Spot something wrong? Ask the admin to fix it.
+              Ask admin to update your meal count or mark you away.
             </p>
           </div>
         </div>
@@ -120,36 +193,48 @@ const Corrections = () => {
             <Button size="lg"><Plus className="w-4 h-4 mr-2" /> New request</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Request a correction</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>New request</DialogTitle></DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-2">
-                <Label>What's wrong?</Label>
-                <Select value={form.entity_type} onValueChange={(v) => setForm({ ...form, entity_type: v })}>
+                <Label>Type</Label>
+                <Select value={kind} onValueChange={(v) => setKind(v as RequestKind)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="meals">A meal entry</SelectItem>
-                    <SelectItem value="deposits">A deposit</SelectItem>
-                    <SelectItem value="expenses">A bazar entry</SelectItem>
-                    <SelectItem value="members">Member info</SelectItem>
+                    <SelectItem value="meal">Update my meal count</SelectItem>
+                    <SelectItem value="away">I'll be away (mark inactive)</SelectItem>
+                    <SelectItem value="back">I'm back (mark active)</SelectItem>
                     <SelectItem value="other">Something else</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {kind === "meal" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Date</Label>
+                    <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Meals</Label>
+                    <Input type="number" step="0.5" min="0" value={form.meal_count} onChange={(e) => setForm({ ...form, meal_count: e.target.value })} />
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
-                <Label>Month</Label>
-                <Input type="month" value={form.month.slice(0, 7)} onChange={(e) => setForm({ ...form, month: e.target.value + "-01" })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Describe the issue *</Label>
+                <Label>Reason / note *</Label>
                 <Textarea
-                  rows={4}
+                  rows={3}
                   value={form.reason}
                   maxLength={500}
-                  placeholder="e.g. My meal count on April 12 should be 1.5, not 0.5"
+                  placeholder="e.g. Skipped dinner, going home for the weekend, etc."
                   onChange={(e) => setForm({ ...form, reason: e.target.value })}
                   required
                 />
               </div>
+              {!memberId && kind !== "other" && (
+                <p className="text-xs text-warning">
+                  Your login isn't linked to a member yet — ask an admin to link you.
+                </p>
+              )}
               <Button type="submit" className="w-full" size="lg">Send request</Button>
             </form>
           </DialogContent>
@@ -167,6 +252,7 @@ const Corrections = () => {
         <div className="space-y-3">
           {rows?.map((r) => {
             const meta = statusMeta[r.status] ?? statusMeta.open;
+            const summary = summarize(r);
             return (
               <Card key={r.id} className="p-4 gradient-card border-border/50 shadow-card">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -174,12 +260,10 @@ const Corrections = () => {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <Badge variant="outline" className={meta.cls}>{meta.label}</Badge>
                       <span className="text-xs text-muted-foreground capitalize">{r.entity_type}</span>
-                      {r.month && (
-                        <span className="text-xs text-muted-foreground">· {format(new Date(r.month), "MMM yyyy")}</span>
-                      )}
                       <span className="text-xs text-muted-foreground">· {format(new Date(r.created_at), "MMM d, h:mm a")}</span>
                     </div>
-                    <p className="text-sm">{r.reason}</p>
+                    {summary && <p className="text-sm font-medium text-primary">{summary}</p>}
+                    <p className="text-sm mt-1">{r.reason}</p>
                     {r.review_note && (
                       <p className="text-xs text-muted-foreground mt-2 italic">
                         Admin note: {r.review_note}
@@ -201,6 +285,11 @@ const Corrections = () => {
       <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) setReviewing(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Review request</DialogTitle></DialogHeader>
+          {reviewing && summarize(reviewing) && (
+            <Card className="p-3 bg-primary/5 border-primary/30">
+              <p className="text-sm font-medium">{summarize(reviewing)}</p>
+            </Card>
+          )}
           <p className="text-sm">{reviewing?.reason}</p>
           <div className="space-y-2">
             <Label>Note (optional)</Label>
@@ -212,16 +301,19 @@ const Corrections = () => {
               maxLength={300}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Approving marks the request resolved. You still need to manually edit the data — both actions are logged.
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => review("rejected")}>
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="outline" onClick={reject}>
               <X className="w-4 h-4 mr-2" /> Reject
             </Button>
-            <Button onClick={() => review("approved")}>
-              <Check className="w-4 h-4 mr-2" /> Approve
-            </Button>
+            {canAutoApply(reviewing) ? (
+              <Button onClick={applyAuto}>
+                <Zap className="w-4 h-4 mr-2" /> Approve & Apply
+              </Button>
+            ) : (
+              <Button onClick={approveOnly}>
+                <Check className="w-4 h-4 mr-2" /> Approve (manual)
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
