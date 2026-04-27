@@ -395,6 +395,10 @@ export type Database = {
           room: string
         }[]
       }
+      apply_correction: {
+        Args: { _note?: string; _request_id: string }
+        Returns: undefined
+      }
       current_member_id: { Args: never; Returns: string }
       has_role: {
         Args: {
