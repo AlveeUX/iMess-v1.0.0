@@ -14,6 +14,9 @@ import Deposits from "./pages/Deposits";
 import Expenses from "./pages/Expenses";
 import Report from "./pages/Report";
 import Settings from "./pages/Settings";
+import Bazar from "./pages/Bazar";
+import Transparency from "./pages/Transparency";
+import Corrections from "./pages/Corrections";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -39,7 +42,10 @@ const App = () => (
               <Route path="/meals" element={<Meals />} />
               <Route path="/deposits" element={<Deposits />} />
               <Route path="/expenses" element={<Expenses />} />
+              <Route path="/bazar" element={<Bazar />} />
               <Route path="/report" element={<Report />} />
+              <Route path="/transparency" element={<Transparency />} />
+              <Route path="/corrections" element={<Corrections />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
