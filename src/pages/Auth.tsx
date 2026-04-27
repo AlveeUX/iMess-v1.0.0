@@ -8,17 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, Shield, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   email: z.string().trim().email("Invalid email").max(255),
   password: z.string().min(6, "Min 6 characters").max(72),
 });
 
+type LoginType = "admin" | "member";
+
 const Auth = () => {
   const nav = useNavigate();
   const { user, loading } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [loginType, setLoginType] = useState<LoginType>("member");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -50,9 +54,34 @@ const Auth = () => {
         toast.success("Account created. You can sign in now.");
         setMode("signin");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Welcome back");
+
+        // Enforce role-gated login: verify the signed-in user matches the selected portal.
+        const userId = signInData.user?.id;
+        if (userId) {
+          const { data: roleRows, error: rolesErr } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userId);
+          if (rolesErr) throw rolesErr;
+          const roles = (roleRows ?? []).map((r) => r.role);
+          const isAdmin = roles.includes("admin");
+
+          if (loginType === "admin" && !isAdmin) {
+            await supabase.auth.signOut();
+            toast.error("This account is not an admin. Use the Member portal.");
+            setBusy(false);
+            return;
+          }
+          if (loginType === "member" && isAdmin) {
+            await supabase.auth.signOut();
+            toast.error("Admins must use the Admin portal — keeping roles separate for transparency.");
+            setBusy(false);
+            return;
+          }
+        }
+        toast.success(loginType === "admin" ? "Welcome, admin" : "Welcome back");
       }
     } catch (err: any) {
       const msg = err?.message || "Something went wrong";
@@ -71,15 +100,40 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 gradient-hero">
       <Card className="w-full max-w-md p-8 gradient-card shadow-elevated border-border/50">
-        <div className="flex flex-col items-center mb-8">
+        <div className="flex flex-col items-center mb-6">
           <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4 shadow-glow">
             <UtensilsCrossed className="w-7 h-7 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold">Mess Manager</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {mode === "signin" ? "Sign in to your mess" : "Create your account"}
+            {mode === "signin" ? `Sign in as ${loginType}` : "Create your account"}
           </p>
         </div>
+
+        {mode === "signin" && (
+          <div className="grid grid-cols-2 gap-2 p-1 rounded-lg bg-secondary/50 mb-5">
+            {(["member", "admin"] as LoginType[]).map((t) => {
+              const active = loginType === t;
+              const Icon = t === "admin" ? Shield : User;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setLoginType(t)}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all",
+                    active
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  {t === "admin" ? "Admin" : "Member"}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <form onSubmit={submit} className="space-y-4">
           {mode === "signup" && (
@@ -97,7 +151,13 @@ const Auth = () => {
             <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} maxLength={72} />
           </div>
           <Button type="submit" className="w-full" size="lg" disabled={busy}>
-            {busy ? "Please wait..." : mode === "signin" ? "Sign in" : "Sign up"}
+            {busy
+              ? "Please wait..."
+              : mode === "signin"
+              ? loginType === "admin"
+                ? "Sign in as Admin"
+                : "Sign in as Member"
+              : "Sign up"}
           </Button>
         </form>
 
@@ -111,7 +171,9 @@ const Auth = () => {
           </button>
         </div>
         <p className="mt-4 text-xs text-center text-muted-foreground">
-          The first account becomes the admin. After that, only emails approved by an admin can sign up.
+          {mode === "signin"
+            ? "Admins and members use separate portals to keep roles transparent."
+            : "The first account becomes the admin. After that, only emails approved by an admin can sign up."}
         </p>
       </Card>
     </div>
