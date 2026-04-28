@@ -53,6 +53,48 @@ export type Database = {
         }
         Relationships: []
       }
+      bills: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          due_date: string
+          id: string
+          is_paid: boolean
+          member_id: string
+          note: string | null
+          paid_date: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          id?: string
+          is_paid?: boolean
+          member_id: string
+          note?: string | null
+          paid_date?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          id?: string
+          is_paid?: boolean
+          member_id?: string
+          note?: string | null
+          paid_date?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       correction_requests: {
         Row: {
           created_at: string
