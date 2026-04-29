@@ -148,9 +148,19 @@ const Members = () => {
                   <Label>Phone</Label>
                   <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} maxLength={20} />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Room</Label>
+                    <Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} maxLength={20} placeholder="A1" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Seat / Bed</Label>
+                    <Input value={form.seat_name} onChange={(e) => setForm({ ...form, seat_name: e.target.value })} maxLength={40} placeholder="Master Bed" />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label>Room</Label>
-                  <Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} maxLength={20} />
+                  <Label>Rent amount (৳)</Label>
+                  <Input type="number" step="0.01" min="0" value={form.rent_amount} onChange={(e) => setForm({ ...form, rent_amount: e.target.value })} placeholder="0" />
                 </div>
                 <Button type="submit" className="w-full" size="lg">
                   {editing ? "Update" : "Add member"}
