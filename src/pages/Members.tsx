@@ -52,7 +52,7 @@ const Members = () => {
   );
 
   const reset = () => {
-    setForm({ name: "", phone: "", room: "" });
+    setForm({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
     setEditing(null);
   };
 
@@ -63,13 +63,22 @@ const Members = () => {
 
   const openEdit = (m: any) => {
     setEditing(m);
-    setForm({ name: m.name, phone: phoneById.get(m.id) ?? "", room: m.room ?? "" });
+    setForm({
+      name: m.name,
+      phone: phoneById.get(m.id) ?? "",
+      room: m.room ?? "",
+      seat_name: m.seat_name ?? "",
+      rent_amount: m.rent_amount != null ? String(m.rent_amount) : "",
+    });
     setOpen(true);
   };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = schema.safeParse(form);
+    const parsed = schema.safeParse({
+      ...form,
+      rent_amount: parseFloat(form.rent_amount || "0"),
+    });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
       return;
@@ -78,6 +87,8 @@ const Members = () => {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       room: form.room.trim() || null,
+      seat_name: form.seat_name.trim() || null,
+      rent_amount: parseFloat(form.rent_amount || "0"),
     };
     const { error } = editing
       ? await supabase.from("members").update(payload).eq("id", editing.id)
