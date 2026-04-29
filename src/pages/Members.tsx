@@ -34,7 +34,7 @@ const Members = () => {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", phone: "", room: "" });
+  const [form, setForm] = useState({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
 
   // Admins fetch phone numbers via a SECURITY DEFINER RPC; phones are not
   // exposed via the regular members table to non-admins.
