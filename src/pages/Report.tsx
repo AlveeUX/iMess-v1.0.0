@@ -94,23 +94,27 @@ const Report = () => {
                 <th className="p-3 text-right">Meals</th>
                 <th className="p-3 text-right">Cost</th>
                 <th className="p-3 text-right">Deposits</th>
+                <th className="p-3 text-right">Rent due</th>
+                <th className="p-3 text-right">Utility due</th>
                 <th className="p-3 text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
-              {data.perMember.map((m) => (
+              {data.perMember.map((m: any) => (
                 <tr key={m.id} className="border-t border-border">
                   <td className="p-3 font-medium">{m.name}</td>
                   <td className="p-3 text-right tabular-nums">{fmtMoney(m.meals)}</td>
                   <td className="p-3 text-right tabular-nums">৳{fmtMoney(m.cost)}</td>
                   <td className="p-3 text-right tabular-nums">৳{fmtMoney(m.deposits)}</td>
+                  <td className="p-3 text-right tabular-nums text-amber-500">৳{fmtMoney(m.rentDue ?? 0)}</td>
+                  <td className="p-3 text-right tabular-nums text-amber-500">৳{fmtMoney(m.utilityDue ?? 0)}</td>
                   <td className={`p-3 text-right tabular-nums font-bold ${m.balance >= 0 ? "text-success" : "text-destructive"}`}>
                     {m.balance >= 0 ? "+" : "−"}৳{fmtMoney(Math.abs(m.balance))}
                   </td>
                 </tr>
               ))}
               {data.perMember.length === 0 && (
-                <tr><td colSpan={5} className="p-12 text-center text-muted-foreground">No data</td></tr>
+                <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">No data</td></tr>
               )}
             </tbody>
             {data.perMember.length > 0 && (
@@ -120,6 +124,8 @@ const Report = () => {
                   <td className="p-3 text-right tabular-nums">{fmtMoney(data.totalMeals)}</td>
                   <td className="p-3 text-right tabular-nums">৳{fmtMoney(data.totalExpense)}</td>
                   <td className="p-3 text-right tabular-nums">৳{fmtMoney(data.totalDeposits)}</td>
+                  <td className="p-3 text-right tabular-nums">৳{fmtMoney(data.rentUnpaid ?? 0)}</td>
+                  <td className="p-3 text-right tabular-nums">৳{fmtMoney(data.utilUnpaid ?? 0)}</td>
                   <td className="p-3 text-right tabular-nums">
                     ৳{fmtMoney(data.totalDeposits - data.totalExpense)}
                   </td>
