@@ -35,12 +35,14 @@ export const useMonthData = (date: Date = new Date()) => {
   return useQuery({
     queryKey: ["month-data", r.monthKey],
     queryFn: async () => {
-      const [meals, deposits, expenses, members, monthRow] = await Promise.all([
+      const [meals, deposits, expenses, members, monthRow, billsRes, billItemsRes] = await Promise.all([
         supabase.from("meals").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("deposits").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("expenses").select("*").gte("date", r.start).lte("date", r.end),
-        supabase.from("members").select("id, name, room, is_active, created_at").order("name"),
+        supabase.from("members").select("id, name, room, seat_name, rent_amount, is_active, created_at").order("name"),
         supabase.from("months").select("*").eq("month", r.monthKey).maybeSingle(),
+        supabase.from("bills_v2").select("*").gte("due_date", r.start).lte("due_date", r.end),
+        supabase.from("bill_items").select("*"),
       ]);
 
       const allExpenses = expenses.data ?? [];
@@ -56,6 +58,37 @@ export const useMonthData = (date: Date = new Date()) => {
       const liveRate = computeRate(totalExpense, totalMeals);
       const rate = isClosed ? Number(monthRow.data?.final_meal_rate ?? 0) : liveRate;
 
+      // Bills summary for the month
+      const monthBills = billsRes.data ?? [];
+      const monthBillIds = new Set(monthBills.map((b: any) => b.id));
+      const monthItems = (billItemsRes.data ?? []).filter((it: any) => monthBillIds.has(it.bill_id));
+      const billTypeById: Record<string, string> = Object.fromEntries(
+        monthBills.map((b: any) => [b.id, b.bill_type])
+      );
+      let rentCollected = 0,
+        rentUnpaid = 0,
+        utilCollected = 0,
+        utilUnpaid = 0;
+      for (const it of monthItems) {
+        const t = billTypeById[it.bill_id];
+        const amt = Number(it.amount);
+        if (t === "rent") {
+          if (it.status === "paid") rentCollected += amt;
+          else rentUnpaid += amt;
+        } else if (t === "utility") {
+          if (it.status === "paid") utilCollected += amt;
+          else utilUnpaid += amt;
+        }
+      }
+      const memberDuesMap: Record<string, { rent: number; utility: number }> = {};
+      for (const it of monthItems) {
+        if (it.status === "paid") continue;
+        const t = billTypeById[it.bill_id];
+        memberDuesMap[it.member_id] ||= { rent: 0, utility: 0 };
+        if (t === "rent") memberDuesMap[it.member_id].rent += Number(it.amount);
+        else if (t === "utility") memberDuesMap[it.member_id].utility += Number(it.amount);
+      }
+
       const perMember = (members.data ?? []).map((m) => {
         const memberMeals = (meals.data ?? [])
           .filter((x) => x.member_id === m.id)
@@ -64,12 +97,15 @@ export const useMonthData = (date: Date = new Date()) => {
           .filter((x) => x.member_id === m.id)
           .reduce((s, x) => s + Number(x.amount), 0);
         const cost = memberMeals * rate;
+        const dues = memberDuesMap[m.id] ?? { rent: 0, utility: 0 };
         return {
           ...m,
           meals: memberMeals,
           deposits: memberDeposits,
           cost,
           balance: memberDeposits - cost,
+          rentDue: dues.rent,
+          utilityDue: dues.utility,
         };
       });
 
@@ -94,6 +130,10 @@ export const useMonthData = (date: Date = new Date()) => {
         pendingCount: pendingExpenses.length,
         advanceBalance: perMember.reduce((s, m) => s + Math.max(0, m.balance), 0),
         dueBalance: perMember.reduce((s, m) => s + Math.max(0, -m.balance), 0),
+        rentCollected,
+        rentUnpaid,
+        utilCollected,
+        utilUnpaid,
       };
     },
   });
