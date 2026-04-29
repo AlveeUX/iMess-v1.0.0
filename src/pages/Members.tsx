@@ -24,6 +24,8 @@ const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(60),
   phone: z.string().trim().max(20).optional(),
   room: z.string().trim().max(20).optional(),
+  seat_name: z.string().trim().max(40).optional(),
+  rent_amount: z.number().min(0).max(10_000_000),
 });
 
 const Members = () => {
