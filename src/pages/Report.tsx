@@ -62,6 +62,28 @@ const Report = () => {
         </div>
       </Card>
 
+      <Card className="p-6 gradient-card border-border/50 shadow-card">
+        <h2 className="text-lg font-bold mb-4">Bills summary</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 rounded-lg bg-secondary/40">
+            <div className="text-xs uppercase text-muted-foreground">Rent collected</div>
+            <div className="text-xl font-bold mt-1 text-success">৳{fmtMoney(data.rentCollected ?? 0)}</div>
+          </div>
+          <div className="p-4 rounded-lg bg-secondary/40">
+            <div className="text-xs uppercase text-muted-foreground">Rent unpaid</div>
+            <div className="text-xl font-bold mt-1 text-destructive">৳{fmtMoney(data.rentUnpaid ?? 0)}</div>
+          </div>
+          <div className="p-4 rounded-lg bg-secondary/40">
+            <div className="text-xs uppercase text-muted-foreground">Utility collected</div>
+            <div className="text-xl font-bold mt-1 text-success">৳{fmtMoney(data.utilCollected ?? 0)}</div>
+          </div>
+          <div className="p-4 rounded-lg bg-secondary/40">
+            <div className="text-xs uppercase text-muted-foreground">Utility unpaid</div>
+            <div className="text-xl font-bold mt-1 text-destructive">৳{fmtMoney(data.utilUnpaid ?? 0)}</div>
+          </div>
+        </div>
+      </Card>
+
       <Card className="gradient-card border-border/50 shadow-card overflow-hidden">
         <div className="p-4 border-b border-border font-semibold">Member-wise breakdown</div>
         <div className="overflow-x-auto">
