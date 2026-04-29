@@ -8,7 +8,7 @@ export const useMembers = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("members")
-        .select("id, name, room, is_active, created_at")
+        .select("id, name, room, seat_name, rent_amount, is_active, created_at")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
