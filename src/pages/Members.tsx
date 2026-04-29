@@ -192,7 +192,15 @@ const Members = () => {
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     {isAdmin && phoneById.get(m.id) && <div>{phoneById.get(m.id)}</div>}
-                    {m.room && <div>Room {m.room}</div>}
+                    {(m.room || (m as any).seat_name) && (
+                      <div>
+                        {m.room && <>Room {m.room}</>}
+                        {(m as any).seat_name && <> · {(m as any).seat_name}</>}
+                      </div>
+                    )}
+                    {Number((m as any).rent_amount) > 0 && (
+                      <div className="text-primary font-medium">Rent ৳{Number((m as any).rent_amount).toFixed(2)}</div>
+                    )}
                   </div>
                 </div>
               </div>
