@@ -53,6 +53,66 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_items: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          bill_id: string
+          created_at: string
+          id: string
+          member_id: string
+          note: string | null
+          paid_on: string | null
+          requested_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          bill_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          note?: string | null
+          paid_on?: string | null
+          requested_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          bill_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          note?: string | null
+          paid_on?: string | null
+          requested_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_items_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_items_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bills: {
         Row: {
           amount: number
@@ -91,6 +151,45 @@ export type Database = {
           note?: string | null
           paid_date?: string | null
           title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bills_v2: {
+        Row: {
+          bill_type: string
+          created_at: string
+          created_by: string | null
+          due_date: string
+          due_month: string | null
+          id: string
+          notes: string | null
+          title: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          bill_type: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          due_month?: string | null
+          id?: string
+          notes?: string | null
+          title: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          bill_type?: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          due_month?: string | null
+          id?: string
+          notes?: string | null
+          title?: string
+          total_amount?: number
           updated_at?: string
         }
         Relationships: []
@@ -302,7 +401,9 @@ export type Database = {
           is_active: boolean
           name: string
           phone: string | null
+          rent_amount: number
           room: string | null
+          seat_name: string | null
         }
         Insert: {
           created_at?: string
@@ -310,7 +411,9 @@ export type Database = {
           is_active?: boolean
           name: string
           phone?: string | null
+          rent_amount?: number
           room?: string | null
+          seat_name?: string | null
         }
         Update: {
           created_at?: string
@@ -318,7 +421,9 @@ export type Database = {
           is_active?: boolean
           name?: string
           phone?: string | null
+          rent_amount?: number
           room?: string | null
+          seat_name?: string | null
         }
         Relationships: []
       }

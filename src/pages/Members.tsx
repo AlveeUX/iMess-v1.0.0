@@ -24,6 +24,8 @@ const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(60),
   phone: z.string().trim().max(20).optional(),
   room: z.string().trim().max(20).optional(),
+  seat_name: z.string().trim().max(40).optional(),
+  rent_amount: z.number().min(0).max(10_000_000),
 });
 
 const Members = () => {
@@ -32,7 +34,7 @@ const Members = () => {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", phone: "", room: "" });
+  const [form, setForm] = useState({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
 
   // Admins fetch phone numbers via a SECURITY DEFINER RPC; phones are not
   // exposed via the regular members table to non-admins.
@@ -50,7 +52,7 @@ const Members = () => {
   );
 
   const reset = () => {
-    setForm({ name: "", phone: "", room: "" });
+    setForm({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
     setEditing(null);
   };
 
@@ -61,13 +63,22 @@ const Members = () => {
 
   const openEdit = (m: any) => {
     setEditing(m);
-    setForm({ name: m.name, phone: phoneById.get(m.id) ?? "", room: m.room ?? "" });
+    setForm({
+      name: m.name,
+      phone: phoneById.get(m.id) ?? "",
+      room: m.room ?? "",
+      seat_name: m.seat_name ?? "",
+      rent_amount: m.rent_amount != null ? String(m.rent_amount) : "",
+    });
     setOpen(true);
   };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = schema.safeParse(form);
+    const parsed = schema.safeParse({
+      ...form,
+      rent_amount: parseFloat(form.rent_amount || "0"),
+    });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
       return;
@@ -76,6 +87,8 @@ const Members = () => {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       room: form.room.trim() || null,
+      seat_name: form.seat_name.trim() || null,
+      rent_amount: parseFloat(form.rent_amount || "0"),
     };
     const { error } = editing
       ? await supabase.from("members").update(payload).eq("id", editing.id)
@@ -135,9 +148,19 @@ const Members = () => {
                   <Label>Phone</Label>
                   <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} maxLength={20} />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Room</Label>
+                    <Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} maxLength={20} placeholder="A1" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Seat / Bed</Label>
+                    <Input value={form.seat_name} onChange={(e) => setForm({ ...form, seat_name: e.target.value })} maxLength={40} placeholder="Master Bed" />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label>Room</Label>
-                  <Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} maxLength={20} />
+                  <Label>Rent amount (৳)</Label>
+                  <Input type="number" step="0.01" min="0" value={form.rent_amount} onChange={(e) => setForm({ ...form, rent_amount: e.target.value })} placeholder="0" />
                 </div>
                 <Button type="submit" className="w-full" size="lg">
                   {editing ? "Update" : "Add member"}
@@ -169,7 +192,15 @@ const Members = () => {
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     {isAdmin && phoneById.get(m.id) && <div>{phoneById.get(m.id)}</div>}
-                    {m.room && <div>Room {m.room}</div>}
+                    {(m.room || (m as any).seat_name) && (
+                      <div>
+                        {m.room && <>Room {m.room}</>}
+                        {(m as any).seat_name && <> · {(m as any).seat_name}</>}
+                      </div>
+                    )}
+                    {Number((m as any).rent_amount) > 0 && (
+                      <div className="text-primary font-medium">Rent ৳{Number((m as any).rent_amount).toFixed(2)}</div>
+                    )}
                   </div>
                 </div>
               </div>
