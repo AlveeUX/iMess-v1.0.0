@@ -47,7 +47,7 @@ export const Layout = () => {
 
   const baseNav: NavEntry[] = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/members", label: "Members", icon: Users, adminOnly: true },
+    { to: "/members", label: "Members", icon: Users },
     { to: "/meals", label: "Meals", icon: UtensilsCrossed },
     { to: "/deposits", label: "Deposits", icon: Wallet },
     { to: "/bazar", label: "Bazar", icon: ShoppingBasket, badge: monthData.data?.pendingCount },
