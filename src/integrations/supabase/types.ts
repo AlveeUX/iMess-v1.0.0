@@ -539,13 +539,17 @@ export type Database = {
           is_active: boolean
           name: string
           phone: string
+          rent_amount: number
           room: string
+          seat_name: string
         }[]
       }
       apply_correction: {
         Args: { _note?: string; _request_id: string }
         Returns: undefined
       }
+      bill_has_member_item: { Args: { _bill_id: string }; Returns: boolean }
+      bill_is_utility: { Args: { _bill_id: string }; Returns: boolean }
       current_member_id: { Args: never; Returns: string }
       has_role: {
         Args: {
@@ -556,6 +560,7 @@ export type Database = {
       }
       is_month_closed: { Args: { _date: string }; Returns: boolean }
       jsonb_diff: { Args: { new: Json; old: Json }; Returns: Json }
+      user_owns_bill_item: { Args: { _item_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "member" | "bazar_contributor"
