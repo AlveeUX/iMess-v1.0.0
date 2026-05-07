@@ -531,6 +531,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_auth_users: {
+        Args: never
+        Returns: {
+          display_name: string
+          email: string
+          id: string
+        }[]
+      }
       admin_list_members_with_phone: {
         Args: never
         Returns: {
