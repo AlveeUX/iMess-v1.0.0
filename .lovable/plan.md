@@ -1,31 +1,40 @@
-I found the real cause: this is not a frontend-only loading issue anymore. The logged-in account is correctly assigned the `admin` role in `user_roles`, but Supabase is returning `permission denied for function has_role` for role checks. Because the app cannot execute `has_role`, `useAuth` loads no roles, so `isAdmin` stays false and all admin-only UI/actions disappear. The same missing grant is also breaking RLS policies on several admin tables.
+## Why Shahad can't edit anything
 
-Plan:
+Looking at the database:
 
-1. Add a Supabase migration to restore safe execute permissions on required helper functions
-   - Grant `authenticated` access to `public.has_role(uuid, app_role)` so RLS policies and the app can evaluate admin/member roles again.
-   - Grant `authenticated` access to `public.current_member_id()` because member-scoped policies rely on it.
-   - Keep both functions as `SECURITY DEFINER` with `search_path = public`, so the roles table remains protected and role checks do not recurse.
+- Auth user `shahadisraq@gmail.com` exists with role `member` but has **no row in `member_links`**, so RLS treats him as "no member" — he cannot insert/update meals, and `current_member_id()` returns null.
+- The members table has a `Shahad` row, but it's never connected to his user id.
+- Bazar (expenses) insert requires role `admin` OR `bazar_contributor`. Shahad only has `member`, so the bazar form/button is hidden and inserts would be blocked.
+- Deposits insert is **admin-only by design** (see `deposits` RLS + `Deposits.tsx` button gated on `isAdmin`). Members are not supposed to add deposits themselves — admin records them. We should keep this behavior unless you say otherwise.
 
-2. Fix the Members page data permission mismatch
-   - The app now reads `seat_name` and `rent_amount` from `members`, but an older privacy migration only granted select access to `id, name, room, is_active, created_at`.
-   - Update column grants so authenticated users can read non-sensitive member columns: `id`, `name`, `room`, `seat_name`, `rent_amount`, `is_active`, `created_at`.
-   - Continue keeping `phone` out of normal table reads; admins still access phone numbers through the protected `admin_list_members_with_phone()` RPC.
-   - Update that RPC return shape to include `seat_name` and `rent_amount` as well, so admin edit forms have complete member data if needed.
+So this is a missing **member↔user link** plus a missing **bazar_contributor role**, not a bug in the pages.
 
-3. Fix recursive bill RLS policies that are generating 500 errors
-   - Current `bills_v2` SELECT policy references `bill_items`, while `bill_items` SELECT policy references `bills_v2`, causing infinite recursion.
-   - Replace the cross-table recursive visibility checks with security-definer helper functions, then rewrite those policies to use the helper functions.
-   - Preserve intended behavior: admins see/manage all bills; members can see utility bills and their own member-linked bill items.
+## Plan
 
-4. Make auth role loading more resilient in the UI
-   - Update `useAuth` so if role loading fails, it records/logs the error and does not silently treat the user as a non-admin without feedback.
-   - Ensure the loading spinner remains until role loading finishes successfully or fails clearly.
+### 1. One-time data fix (migration)
+- Insert into `member_links`: link member `Shahad` (`f603bf6f-…`) ↔ user `shahadisraq@gmail.com` (`f86120f3-…`).
+- Insert into `user_roles`: give that user the `bazar_contributor` role (in addition to `member`) so he can submit bazar entries for admin approval.
 
-5. Verify after changes
-   - Confirm the admin user can execute `has_role` through the app-facing path.
-   - Confirm `/members` can query the member list without 403.
-   - Confirm `useAuth` receives `admin` for `absaralvee23@gmail.com` so the “Add member” button and admin settings render immediately.
-   - Confirm the bill queries no longer hit infinite-recursion errors.
+After this, Shahad will be able to:
+- Add/edit/delete his own meals on the calendar (RLS already allows member-owned meals).
+- Submit bazar entries (they'll go to `pending` until an admin approves).
 
-This will restore the Add member button and the rest of the admin functionality without storing roles in unsafe client-side storage.
+### 2. UI: manage member↔user link and roles from the Members page (admin only)
+On each member card, add a small admin-only "Account" section:
+- Show which auth user (email) is linked, if any.
+- "Link account" dropdown listing auth users (from `profiles` joined with email — we'll fetch via a new SECURITY DEFINER RPC `admin_list_auth_users()` returning `id, email, display_name`, since `auth.users` isn't directly readable).
+- "Unlink" button.
+- Role checkboxes: Admin / Bazar contributor (writes to `user_roles`).
+
+This way you won't have to run SQL again next time you add a member.
+
+### 3. Keep deposits admin-only
+No change. If you want members to record their own deposits too, tell me and I'll add a "submit deposit for approval" flow mirroring how bazar works (pending → admin approves).
+
+## Technical details
+- New migration:
+  - `INSERT INTO member_links (member_id, user_id) VALUES (...)` for Shahad.
+  - `INSERT INTO user_roles (user_id, role) VALUES (..., 'bazar_contributor')`.
+  - New RPC `admin_list_auth_users()` (SECURITY DEFINER, admin-only) returning `id, email, display_name` from `auth.users` joined with `profiles`.
+- `src/pages/Members.tsx`: fetch linked-account info + auth users list (admin only); add "Account & roles" controls per card calling `member_links` insert/delete and `user_roles` insert/delete.
+- No changes to RLS policies — existing ones already do the right thing once the link + role exist.
