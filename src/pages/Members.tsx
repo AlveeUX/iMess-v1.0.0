@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMembers } from "@/hooks/useMessData";
+import { useMembers, useMonthData } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,9 +24,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Link2, Unlink } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Trash2, Link2, Unlink, Crown, Utensils, Wallet, ShoppingBasket, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { fmtMoney } from "@/lib/mess";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(60),
@@ -37,16 +48,18 @@ const schema = z.object({
 });
 
 type AuthUser = { id: string; email: string; display_name: string | null };
-type RoleRow = { user_id: string; role: "admin" | "bazar_contributor" | "member" };
+type RoleRow = { user_id: string; role: "admin" | "bazar_contributor" | "member" | "super_admin" };
 type LinkRow = { member_id: string; user_id: string };
 
 const Members = () => {
   const { data: members, isLoading } = useMembers();
-  const { isAdmin } = useAuth();
+  const { data: monthData } = useMonthData();
+  const { isAdmin, isSuperAdmin, memberId: myMemberId } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
+  const [transferTo, setTransferTo] = useState<{ userId: string; email: string } | null>(null);
 
   const { data: phoneRows } = useQuery({
     queryKey: ["members-phones"],
@@ -73,7 +86,6 @@ const Members = () => {
 
   const { data: links } = useQuery({
     queryKey: ["member-links-all"],
-    enabled: isAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("member_links").select("member_id,user_id");
       if (error) throw error;
@@ -185,6 +197,14 @@ const Members = () => {
     qc.invalidateQueries({ queryKey: ["all-roles"] });
   };
 
+  const grantSuperAdmin = async (userId: string) => {
+    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: "super_admin" });
+    if (error) return toast.error(error.message);
+    toast.success("Super admin granted");
+    qc.invalidateQueries({ queryKey: ["all-roles"] });
+    setTransferTo(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -247,12 +267,25 @@ const Members = () => {
             const linkedUserId = linkByMember.get(m.id);
             const linkedUser = linkedUserId ? userById.get(linkedUserId) : null;
             const userRoles = linkedUserId ? rolesByUser.get(linkedUserId) ?? new Set<string>() : new Set<string>();
-            const linkedMemberIds = new Set((links ?? []).map((l) => l.member_id));
+            const isYou = !!myMemberId && myMemberId === m.id;
+            const isMemberSuper = userRoles.has("super_admin");
             const availableUsers = (authUsers ?? []).filter((u) => {
-              // hide users already linked to another member
               const usedBy = (links ?? []).find((l) => l.user_id === u.id);
               return !usedBy || usedBy.member_id === m.id;
             });
+
+            // Per-member month summary
+            const memberPM = monthData?.perMember.find((p: any) => p.id === m.id);
+            const mealsCount = memberPM?.meals ?? 0;
+            const depositTotal = memberPM?.deposits ?? 0;
+            const utilityDue = memberPM?.utilityDue ?? 0;
+            // Bazar contributed: sum approved expenses where submitter is the linked user
+            const bazarTotal = linkedUserId && monthData
+              ? monthData.approvedExpenses
+                  .filter((e: any) => e.submitted_by === linkedUserId)
+                  .reduce((s: number, e: any) => s + Number(e.amount), 0)
+              : 0;
+
             return (
               <Card key={m.id} className="p-5 gradient-card border-border/50 shadow-card">
                 <div className="flex items-start gap-3">
@@ -260,8 +293,14 @@ const Members = () => {
                     {m.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold truncate">{m.name}</h3>
+                      {isYou && <Badge className="text-xs bg-primary/15 text-primary border-primary/30" variant="outline">You</Badge>}
+                      {isMemberSuper && (
+                        <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-500 border-amber-500/30 gap-1">
+                          <Crown className="w-3 h-3" /> Super
+                        </Badge>
+                      )}
                       {!m.is_active && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
@@ -275,6 +314,38 @@ const Members = () => {
                       {Number((m as any).rent_amount) > 0 && (
                         <div className="text-primary font-medium">Rent ৳{Number((m as any).rent_amount).toFixed(2)}</div>
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-member month summary — visible to all signed-in users */}
+                <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-3.5 h-3.5 text-muted-foreground" />
+                    <div>
+                      <div className="text-muted-foreground">Meals</div>
+                      <div className="font-semibold tabular-nums">{mealsCount}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+                    <div>
+                      <div className="text-muted-foreground">Deposit</div>
+                      <div className="font-semibold tabular-nums">৳{fmtMoney(depositTotal)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ShoppingBasket className="w-3.5 h-3.5 text-muted-foreground" />
+                    <div>
+                      <div className="text-muted-foreground">Bazar</div>
+                      <div className="font-semibold tabular-nums">৳{fmtMoney(bazarTotal)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+                    <div>
+                      <div className="text-muted-foreground">Utility due</div>
+                      <div className={`font-semibold tabular-nums ${utilityDue > 0 ? "text-amber-500" : ""}`}>৳{fmtMoney(utilityDue)}</div>
                     </div>
                   </div>
                 </div>
@@ -313,14 +384,16 @@ const Members = () => {
                     {linkedUserId && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">Roles</Label>
-                        <div className="flex gap-3 text-xs">
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <Checkbox
-                              checked={userRoles.has("admin")}
-                              onCheckedChange={(v) => toggleRole(linkedUserId, "admin", !!v)}
-                            />
-                            Admin
-                          </label>
+                        <div className="flex gap-3 text-xs flex-wrap">
+                          {isSuperAdmin && (
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <Checkbox
+                                checked={userRoles.has("admin")}
+                                onCheckedChange={(v) => toggleRole(linkedUserId, "admin", !!v)}
+                              />
+                              Admin
+                            </label>
+                          )}
                           <label className="flex items-center gap-1.5 cursor-pointer">
                             <Checkbox
                               checked={userRoles.has("bazar_contributor")}
@@ -328,6 +401,16 @@ const Members = () => {
                             />
                             Bazar contributor
                           </label>
+                          {isSuperAdmin && !isMemberSuper && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => setTransferTo({ userId: linkedUserId, email: linkedUser?.email ?? "" })}
+                            >
+                              <Crown className="w-3 h-3" /> Make super admin
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -353,6 +436,23 @@ const Members = () => {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!transferTo} onOpenChange={(o) => { if (!o) setTransferTo(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Grant super admin?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <b>{transferTo?.email}</b> will become a super admin and be able to add or remove other admins (including you). This cannot be undone except by another super admin.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => transferTo && grantSuperAdmin(transferTo.userId)}>
+              Grant super admin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

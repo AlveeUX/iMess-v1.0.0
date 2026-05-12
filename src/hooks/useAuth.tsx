@@ -2,13 +2,14 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "bazar_contributor" | "member";
+export type AppRole = "admin" | "bazar_contributor" | "member" | "super_admin";
 
 interface AuthCtx {
   user: User | null;
   session: Session | null;
   roles: AppRole[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   isContributor: boolean;
   memberId: string | null;
   loading: boolean;
@@ -20,6 +21,7 @@ const Ctx = createContext<AuthCtx>({
   session: null,
   roles: [],
   isAdmin: false,
+  isSuperAdmin: false,
   isContributor: false,
   memberId: null,
   loading: true,
@@ -68,7 +70,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const isAdmin = roles.includes("admin");
+  const isSuperAdmin = roles.includes("super_admin");
+  const isAdmin = isSuperAdmin || roles.includes("admin");
   const isContributor = isAdmin || roles.includes("bazar_contributor");
 
   return (
@@ -78,6 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         session,
         roles,
         isAdmin,
+        isSuperAdmin,
         isContributor,
         memberId,
         loading,

@@ -1,8 +1,9 @@
 import { Badge } from "@/components/ui/badge";
-import { Shield, ShoppingBasket, User } from "lucide-react";
+import { Shield, ShoppingBasket, User, Crown } from "lucide-react";
 import type { AppRole } from "@/hooks/useAuth";
 
 const meta: Record<AppRole, { label: string; icon: any; cls: string }> = {
+  super_admin: { label: "Super Admin", icon: Crown, cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
   admin: { label: "Admin", icon: Shield, cls: "bg-primary/15 text-primary border-primary/30" },
   bazar_contributor: {
     label: "Bazar Contributor",
