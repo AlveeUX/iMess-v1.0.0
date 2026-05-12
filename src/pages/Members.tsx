@@ -197,6 +197,14 @@ const Members = () => {
     qc.invalidateQueries({ queryKey: ["all-roles"] });
   };
 
+  const grantSuperAdmin = async (userId: string) => {
+    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: "super_admin" });
+    if (error) return toast.error(error.message);
+    toast.success("Super admin granted");
+    qc.invalidateQueries({ queryKey: ["all-roles"] });
+    setTransferTo(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
