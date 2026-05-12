@@ -262,6 +262,12 @@ export type Database = {
           member_id: string
           method: string
           note: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string | null
         }
         Insert: {
           amount: number
@@ -271,6 +277,12 @@ export type Database = {
           member_id: string
           method?: string
           note?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
         }
         Update: {
           amount?: number
@@ -280,6 +292,12 @@ export type Database = {
           member_id?: string
           method?: string
           note?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
         }
         Relationships: [
           {
@@ -566,6 +584,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_or_super: { Args: { _user_id: string }; Returns: boolean }
       is_month_closed: { Args: { _date: string }; Returns: boolean }
       jsonb_diff: { Args: { new: Json; old: Json }; Returns: Json }
       user_owns_bill_item: { Args: { _item_id: string }; Returns: boolean }
