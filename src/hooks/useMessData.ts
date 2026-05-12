@@ -50,10 +50,15 @@ export const useMonthData = (date: Date = new Date()) => {
       const pendingExpenses = allExpenses.filter((e) => e.status === "pending");
       const rejectedExpenses = allExpenses.filter((e) => e.status === "rejected");
 
+      const allDeposits = (deposits.data ?? []) as any[];
+      const approvedDeposits = allDeposits.filter((d) => (d.status ?? "approved") === "approved");
+      const pendingDeposits = allDeposits.filter((d) => d.status === "pending");
+
       const totalMeals = (meals.data ?? []).reduce((s, m) => s + Number(m.meal_count), 0);
       const totalExpense = approvedExpenses.reduce((s, e) => s + Number(e.amount), 0);
       const pendingTotal = pendingExpenses.reduce((s, e) => s + Number(e.amount), 0);
-      const totalDeposits = (deposits.data ?? []).reduce((s, d) => s + Number(d.amount), 0);
+      const totalDeposits = approvedDeposits.reduce((s, d) => s + Number(d.amount), 0);
+      const pendingDepositTotal = pendingDeposits.reduce((s, d) => s + Number(d.amount), 0);
       const isClosed = monthRow.data?.is_closed ?? false;
       const liveRate = computeRate(totalExpense, totalMeals);
       const rate = isClosed ? Number(monthRow.data?.final_meal_rate ?? 0) : liveRate;
