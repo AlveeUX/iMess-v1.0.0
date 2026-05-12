@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMembers } from "@/hooks/useMessData";
+import { useMembers, useMonthData } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,9 +24,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Link2, Unlink } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Trash2, Link2, Unlink, Crown, Utensils, Wallet, ShoppingBasket, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
+import { fmtMoney } from "@/lib/mess";
 
 const schema = z.object({
   name: z.string().trim().min(1, "Name required").max(60),
@@ -37,7 +48,7 @@ const schema = z.object({
 });
 
 type AuthUser = { id: string; email: string; display_name: string | null };
-type RoleRow = { user_id: string; role: "admin" | "bazar_contributor" | "member" };
+type RoleRow = { user_id: string; role: "admin" | "bazar_contributor" | "member" | "super_admin" };
 type LinkRow = { member_id: string; user_id: string };
 
 const Members = () => {
