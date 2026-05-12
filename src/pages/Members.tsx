@@ -86,7 +86,6 @@ const Members = () => {
 
   const { data: links } = useQuery({
     queryKey: ["member-links-all"],
-    enabled: isAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from("member_links").select("member_id,user_id");
       if (error) throw error;
