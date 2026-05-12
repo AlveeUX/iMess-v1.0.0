@@ -53,11 +53,13 @@ type LinkRow = { member_id: string; user_id: string };
 
 const Members = () => {
   const { data: members, isLoading } = useMembers();
-  const { isAdmin } = useAuth();
+  const { data: monthData } = useMonthData();
+  const { isAdmin, isSuperAdmin, memberId: myMemberId } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: "", phone: "", room: "", seat_name: "", rent_amount: "" });
+  const [transferTo, setTransferTo] = useState<{ userId: string; email: string } | null>(null);
 
   const { data: phoneRows } = useQuery({
     queryKey: ["members-phones"],
