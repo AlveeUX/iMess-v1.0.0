@@ -227,7 +227,7 @@ const Bazar = () => {
                   <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
                 )}
                 {isAdmin && !locked && (
-                  <Button size="icon" variant="ghost" onClick={() => remove(e.id)}>
+                  <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 )}

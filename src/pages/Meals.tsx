@@ -161,13 +161,13 @@ const Meals = () => {
           <p className="text-muted-foreground mt-1">Tap any day to update your meal count</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => setCursor(subMonths(cursor, 1))}>
+          <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => setCursor(subMonths(cursor, 1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <div className="font-semibold text-lg w-40 text-center tabular-nums">
             {format(cursor, "MMMM yyyy")}
           </div>
-          <Button variant="outline" size="icon" onClick={() => setCursor(addMonths(cursor, 1))}>
+          <Button variant="outline" size="icon" aria-label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
@@ -322,6 +322,7 @@ const Meals = () => {
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Decrease meal count"
                 className="rounded-full h-12 w-12"
                 onClick={() =>
                   setEditValue(String(Math.max(0, +(parseFloat(editValue || "0") - 0.5).toFixed(1))))
@@ -340,6 +341,7 @@ const Meals = () => {
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Increase meal count"
                 className="rounded-full h-12 w-12"
                 onClick={() =>
                   setEditValue(String(+(parseFloat(editValue || "0") + 0.5).toFixed(1)))

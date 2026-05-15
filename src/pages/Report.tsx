@@ -22,11 +22,11 @@ const Report = () => {
           <p className="text-muted-foreground mt-1">Final summary & member-wise breakdown</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => setMonth(subMonths(month, 1))}>
+          <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => setMonth(subMonths(month, 1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <div className="font-semibold min-w-[140px] text-center">{format(month, "MMMM yyyy")}</div>
-          <Button variant="outline" size="icon" onClick={() => setMonth(addMonths(month, 1))}>
+          <Button variant="outline" size="icon" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
             <ChevronRight className="w-4 h-4" />
           </Button>
           <Button variant="outline" onClick={() => window.print()}>

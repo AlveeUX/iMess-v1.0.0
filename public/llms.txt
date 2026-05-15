@@ -1,0 +1,20 @@
+# iMess
+
+> Smart mess management system to track meals, deposits, bazar expenses, and utility bills with transparent member-wise monthly reports.
+
+iMess helps shared messes and hostels keep transparent records of meals, deposits, market (bazar) expenses, and utility/rent bills. Members can submit their own meal counts and deposits, while admins approve entries and produce monthly reports.
+
+## Pages
+
+- [Sign in](/auth): Member and admin login.
+
+## Optional
+
+- [Dashboard](/): Member dashboard (auth required).
+- [Members](/members): Member directory (auth required).
+- [Meals](/meals): Daily meal tracking (auth required).
+- [Deposits](/deposits): Deposit submissions and approvals (auth required).
+- [Bazar](/bazar): Market expense submissions (auth required).
+- [Bills](/bills): Rent and utility bills (auth required).
+- [Report](/report): Monthly reports (auth required).
+- [Transparency](/transparency): Audit log (auth required).
