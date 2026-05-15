@@ -1,40 +1,30 @@
-## Why Shahad can't edit anything
+## Problem
 
-Looking at the database:
+Clicking **Approve & Apply** on a correction request fails with `record "old" has no field "status"`.
 
-- Auth user `shahadisraq@gmail.com` exists with role `member` but has **no row in `member_links`**, so RLS treats him as "no member" — he cannot insert/update meals, and `current_member_id()` returns null.
-- The members table has a `Shahad` row, but it's never connected to his user id.
-- Bazar (expenses) insert requires role `admin` OR `bazar_contributor`. Shahad only has `member`, so the bazar form/button is hidden and inserts would be blocked.
-- Deposits insert is **admin-only by design** (see `deposits` RLS + `Deposits.tsx` button gated on `isAdmin`). Members are not supposed to add deposits themselves — admin records them. We should keep this behavior unless you say otherwise.
+Root cause is in the `log_change()` trigger function. It checks status/is_closed columns inline:
 
-So this is a missing **member↔user link** plus a missing **bazar_contributor role**, not a bug in the pages.
+```
+IF TG_TABLE_NAME = 'expenses' AND OLD.status IS DISTINCT FROM NEW.status THEN ...
+ELSIF TG_TABLE_NAME = 'months' AND OLD.is_closed IS DISTINCT FROM NEW.is_closed THEN ...
+ELSIF TG_TABLE_NAME = 'correction_requests' AND OLD.status IS DISTINCT FROM NEW.status THEN ...
+```
+
+Even though the table-name guard is false for `meals`/`members`/etc., Postgres still resolves `OLD.status` against the row type at runtime and raises an error because those tables have no `status` column. The same trigger is attached to many tables, so any UPDATE on a table without `status` (e.g. the `meals` UPDATE that `apply_correction` performs via `ON CONFLICT DO UPDATE`) blows up — which aborts the whole transaction and prevents the approval from being applied.
+
+## Fix
+
+Rewrite `log_change()` so the column-specific checks are only reached for tables that actually have those columns. Use nested `IF TG_TABLE_NAME = '…' THEN` blocks (or read the field through `to_jsonb(OLD)->>'status'` which never errors for missing fields).
+
+Behavior stays identical:
+- expenses UPDATE that flips status → logs `approved` / `rejected` / `updated`
+- months UPDATE that flips `is_closed` → logs `closed` / `reopened`
+- correction_requests UPDATE that flips status → logs the new status
+- everything else → `updated`
 
 ## Plan
 
-### 1. One-time data fix (migration)
-- Insert into `member_links`: link member `Shahad` (`f603bf6f-…`) ↔ user `shahadisraq@gmail.com` (`f86120f3-…`).
-- Insert into `user_roles`: give that user the `bazar_contributor` role (in addition to `member`) so he can submit bazar entries for admin approval.
+1. Migration: replace `public.log_change()` with a version that nests the per-table status/is_closed checks inside an outer `IF TG_TABLE_NAME = '…'` so OLD/NEW field references are only resolved on tables that have those columns. Keep all other logic (PII stripping for members, INSERT/DELETE handling, activity_logs insert) unchanged.
+2. Verify in the preview by approving the open correction request — the toast should disappear and the meal value should update.
 
-After this, Shahad will be able to:
-- Add/edit/delete his own meals on the calendar (RLS already allows member-owned meals).
-- Submit bazar entries (they'll go to `pending` until an admin approves).
-
-### 2. UI: manage member↔user link and roles from the Members page (admin only)
-On each member card, add a small admin-only "Account" section:
-- Show which auth user (email) is linked, if any.
-- "Link account" dropdown listing auth users (from `profiles` joined with email — we'll fetch via a new SECURITY DEFINER RPC `admin_list_auth_users()` returning `id, email, display_name`, since `auth.users` isn't directly readable).
-- "Unlink" button.
-- Role checkboxes: Admin / Bazar contributor (writes to `user_roles`).
-
-This way you won't have to run SQL again next time you add a member.
-
-### 3. Keep deposits admin-only
-No change. If you want members to record their own deposits too, tell me and I'll add a "submit deposit for approval" flow mirroring how bazar works (pending → admin approves).
-
-## Technical details
-- New migration:
-  - `INSERT INTO member_links (member_id, user_id) VALUES (...)` for Shahad.
-  - `INSERT INTO user_roles (user_id, role) VALUES (..., 'bazar_contributor')`.
-  - New RPC `admin_list_auth_users()` (SECURITY DEFINER, admin-only) returning `id, email, display_name` from `auth.users` joined with `profiles`.
-- `src/pages/Members.tsx`: fetch linked-account info + auth users list (admin only); add "Account & roles" controls per card calling `member_links` insert/delete and `user_roles` insert/delete.
-- No changes to RLS policies — existing ones already do the right thing once the link + role exist.
+No frontend changes needed.
