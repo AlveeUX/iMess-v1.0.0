@@ -163,7 +163,7 @@ const Expenses = () => {
                 <div className="flex items-center gap-2">
                   <span className="font-bold tabular-nums">৳{fmtMoney(Number(e.amount))}</span>
                   {isAdmin && !locked && (
-                    <Button size="icon" variant="ghost" onClick={() => remove(e.id)}>
+                    <Button size="icon" variant="ghost" aria-label="Delete expense" onClick={() => remove(e.id)}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   )}

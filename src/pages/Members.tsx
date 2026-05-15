@@ -294,7 +294,7 @@ const Members = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold truncate">{m.name}</h3>
+                      <h2 className="font-semibold truncate text-base">{m.name}</h2>
                       {isYou && <Badge className="text-xs bg-primary/15 text-primary border-primary/30" variant="outline">You</Badge>}
                       {isMemberSuper && (
                         <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-500 border-amber-500/30 gap-1">
@@ -374,7 +374,7 @@ const Members = () => {
                           </SelectContent>
                         </Select>
                         {linkedUserId && (
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => unlinkAccount(m.id)}>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Unlink account from ${m.name}`} onClick={() => unlinkAccount(m.id)}>
                             <Unlink className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -421,10 +421,10 @@ const Members = () => {
                         <span className="text-xs text-muted-foreground">Active</span>
                       </div>
                       <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(m)}>
+                        <Button size="icon" variant="ghost" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)}>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => remove(m)}>
+                        <Button size="icon" variant="ghost" aria-label={`Delete ${m.name}`} onClick={() => remove(m)}>
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
                       </div>

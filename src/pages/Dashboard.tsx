@@ -56,7 +56,7 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Mess Dashboard</h1>
           <p className="text-muted-foreground mt-1">{data.range.label} · Financial control center</p>
         </div>
         {data.isClosed && (

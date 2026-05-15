@@ -276,7 +276,7 @@ const Deposits = () => {
                     )}
                     {((isAdmin && !locked) ||
                       (!isAdmin && status === "pending" && d.submitted_by === user?.id && !locked)) && (
-                      <Button size="icon" variant="ghost" onClick={() => remove(d.id)}>
+                      <Button size="icon" variant="ghost" aria-label="Delete deposit" onClick={() => remove(d.id)}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     )}
