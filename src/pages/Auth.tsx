@@ -92,11 +92,7 @@ const Auth = () => {
       }
     } catch (err: any) {
       const msg = err?.message || "Something went wrong";
-      if (/allowlist|restricted|Database error/i.test(msg)) {
-        toast.error("Sign-ups are restricted. Ask an admin to add your email to the allowlist.");
-      } else {
-        toast.error(msg);
-      }
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
