@@ -42,17 +42,24 @@ const Auth = () => {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: { display_name: name || email.split("@")[0] },
-          },
-        });
-        if (error) throw error;
+        const { data: fnData, error: fnError } = await supabase.functions.invoke(
+          "signup-allowlisted",
+          { body: { email, password, display_name: name || email.split("@")[0] } }
+        );
+        if (fnError) {
+          // Try to surface the function's JSON error message
+          const ctx: any = (fnError as any).context;
+          let msg = fnError.message;
+          try {
+            const body = await ctx?.json?.();
+            if (body?.error) msg = body.error;
+          } catch {}
+          throw new Error(msg);
+        }
+        if (fnData?.error) throw new Error(fnData.error);
         toast.success("Account created. You can sign in now.");
-        setMode("signin");
+        setMode("signup" === mode ? "signin" : "signin");
+        setPassword("");
       } else {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
