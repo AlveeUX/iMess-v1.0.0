@@ -29,30 +29,30 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
-    // Check whether this is the very first user (becomes admin automatically).
-    const { count: userCount, error: countErr } = await admin
-      .schema("auth" as any)
-      .from("users" as any)
-      .select("id", { count: "exact", head: true });
-
-    if (countErr) {
-      console.error("count users error", countErr);
+    // First-user bootstrap is handled by the handle_new_user DB trigger.
+    // Here we only enforce the allowlist for non-first signups.
+    // We check the allowlist; if empty AND no users exist yet, allow (trigger will make first user admin).
+    const { data: allow, error: allowErr } = await admin
+      .from("signup_allowlist")
+      .select("id")
+      .eq("email", normalized)
+      .maybeSingle();
+    if (allowErr) {
+      console.error("allowlist check error", allowErr);
       return json({ error: "Server error" }, 500);
     }
 
-    const isFirstUser = (userCount ?? 0) === 0;
-
-    if (!isFirstUser) {
-      const { data: allow, error: allowErr } = await admin
-        .from("signup_allowlist")
-        .select("id")
-        .eq("email", normalized)
-        .maybeSingle();
-      if (allowErr) {
-        console.error("allowlist check error", allowErr);
+    if (!allow) {
+      // Allow only if there are zero users yet (first-time bootstrap).
+      const { data: usersPage, error: listErr } = await admin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1,
+      });
+      if (listErr) {
+        console.error("list users error", listErr);
         return json({ error: "Server error" }, 500);
       }
-      if (!allow) {
+      if ((usersPage?.users?.length ?? 0) > 0) {
         return json(
           { error: "Sign-ups are restricted. Ask an admin to add your email to the allowlist." },
           403
