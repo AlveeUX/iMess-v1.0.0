@@ -47,18 +47,19 @@ const Auth = () => {
           { body: { email, password, display_name: name || email.split("@")[0] } }
         );
         if (fnError) {
-          // Try to surface the function's JSON error message
-          const ctx: any = (fnError as any).context;
-          let msg = fnError.message;
-          try {
-            const body = await ctx?.json?.();
-            if (body?.error) msg = body.error;
-          } catch {}
+          let msg = fnError.message || "Could not create account";
+          const res = (fnError as any).context as Response | undefined;
+          if (res && typeof res.json === "function") {
+            try {
+              const body = await res.json();
+              if (body?.error) msg = body.error;
+            } catch {}
+          }
           throw new Error(msg);
         }
         if (fnData?.error) throw new Error(fnData.error);
         toast.success("Account created. You can sign in now.");
-        setMode("signup" === mode ? "signin" : "signin");
+        setMode("signin");
         setPassword("");
       } else {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
