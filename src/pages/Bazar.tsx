@@ -167,14 +167,16 @@ const Bazar = () => {
             </p>
           </div>
         </div>
-        {isContributor && !locked && (
-          <Dialog open={open} onOpenChange={setOpen}>
+        {!locked && (
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(blankForm()); } }}>
             <DialogTrigger asChild>
-              <Button size="lg"><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
+              <Button size="lg" onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{isAdmin ? "New bazar" : "Submit bazar for approval"}</DialogTitle>
+                <DialogTitle>
+                  {editingId ? "Edit bazar" : isAdmin ? "New bazar" : "Submit bazar for approval"}
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={submit} className="space-y-4">
                 <div className="space-y-2">
@@ -203,13 +205,13 @@ const Bazar = () => {
                   <Label>Date</Label>
                   <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 </div>
-                {!isAdmin && (
+                {!isAdmin && !editingId && (
                   <p className="text-xs text-muted-foreground">
                     Your submission will be marked <strong>pending</strong> until admin approves it.
                   </p>
                 )}
                 <Button type="submit" className="w-full" size="lg">
-                  {isAdmin ? "Save bazar" : "Submit for approval"}
+                  {editingId ? "Save changes" : isAdmin ? "Save bazar" : "Submit for approval"}
                 </Button>
               </form>
             </DialogContent>
