@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
 import { useSearchParams } from "react-router-dom";
@@ -61,30 +61,57 @@ const Bazar = () => {
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as "pending" | "approved" | "rejected" | "all") ?? "all";
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState("");
-  const [form, setForm] = useState({
+  const blankForm = () => ({
     title: "",
     amount: "",
     category: "bazar",
     date: format(new Date(), "yyyy-MM-dd"),
   });
+  const [form, setForm] = useState(blankForm());
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(blankForm());
+    setOpen(true);
+  };
+
+  const openEdit = (e: any) => {
+    setEditingId(e.id);
+    setForm({
+      title: e.title,
+      amount: String(e.amount),
+      category: e.category,
+      date: e.date,
+    });
+    setOpen(true);
+  };
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     const parsed = schema.safeParse({ ...form, amount: parseFloat(form.amount) });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
-    const { error } = await supabase.from("expenses").insert({
+    const payload = {
       title: form.title.trim(),
       amount: parseFloat(form.amount),
       category: form.category,
       date: form.date,
-    });
-    if (error) return toast.error(error.message);
-    toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    };
+    if (editingId) {
+      const { error } = await supabase.from("expenses").update(payload).eq("id", editingId);
+      if (error) return toast.error(error.message);
+      toast.success("Bazar updated");
+    } else {
+      const { error } = await supabase.from("expenses").insert(payload);
+      if (error) return toast.error(error.message);
+      toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    }
     qc.invalidateQueries({ queryKey: ["month-data"] });
     setOpen(false);
-    setForm({ title: "", amount: "", category: "bazar", date: format(new Date(), "yyyy-MM-dd") });
+    setEditingId(null);
+    setForm(blankForm());
   };
 
   const review = async (status: "approved" | "rejected") => {
@@ -140,14 +167,16 @@ const Bazar = () => {
             </p>
           </div>
         </div>
-        {isContributor && !locked && (
-          <Dialog open={open} onOpenChange={setOpen}>
+        {!locked && (
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(blankForm()); } }}>
             <DialogTrigger asChild>
-              <Button size="lg"><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
+              <Button size="lg" onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{isAdmin ? "New bazar" : "Submit bazar for approval"}</DialogTitle>
+                <DialogTitle>
+                  {editingId ? "Edit bazar" : isAdmin ? "New bazar" : "Submit bazar for approval"}
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={submit} className="space-y-4">
                 <div className="space-y-2">
@@ -176,13 +205,13 @@ const Bazar = () => {
                   <Label>Date</Label>
                   <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 </div>
-                {!isAdmin && (
+                {!isAdmin && !editingId && (
                   <p className="text-xs text-muted-foreground">
                     Your submission will be marked <strong>pending</strong> until admin approves it.
                   </p>
                 )}
                 <Button type="submit" className="w-full" size="lg">
-                  {isAdmin ? "Save bazar" : "Submit for approval"}
+                  {editingId ? "Save changes" : isAdmin ? "Save bazar" : "Submit for approval"}
                 </Button>
               </form>
             </DialogContent>
@@ -226,7 +255,12 @@ const Bazar = () => {
                 {isAdmin && e.status === "pending" && !locked && (
                   <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
                 )}
-                {isAdmin && !locked && (
+                {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
+                  <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                )}
+                {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (
                   <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
