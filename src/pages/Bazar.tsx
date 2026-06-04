@@ -255,7 +255,12 @@ const Bazar = () => {
                 {isAdmin && e.status === "pending" && !locked && (
                   <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
                 )}
-                {isAdmin && !locked && (
+                {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
+                  <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                )}
+                {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (
                   <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
