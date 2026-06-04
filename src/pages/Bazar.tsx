@@ -139,18 +139,40 @@ const Bazar = () => {
     qc.invalidateQueries({ queryKey: ["month-data"] });
   };
 
+  // Profile lookup for submitter names (community transparency)
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("user_id, display_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const nameOf = useMemo(() => {
+    const m = new Map<string, string>();
+    (profiles ?? []).forEach((p: any) => m.set(p.user_id, p.display_name || "Member"));
+    return (uid?: string | null) => (uid ? m.get(uid) ?? "Member" : "—");
+  }, [profiles]);
+
   if (isLoading || !data) return <div className="text-muted-foreground">Loading…</div>;
   const locked = data.isClosed;
 
-  // Filter: contributors see only their own; admin sees all
-  let visible = data.expenses;
-  if (!isAdmin) visible = visible.filter((e) => e.submitted_by === user?.id);
+  // Visibility: approved items are public to all signed-in users.
+  // Pending / rejected items only show to the submitter (or admin).
+  let visible = data.expenses.filter(
+    (e) => e.status === "approved" || isAdmin || e.submitted_by === user?.id
+  );
   if (tab !== "all") visible = visible.filter((e) => e.status === tab);
 
+  const ownPendingOrRejected = (status: string) =>
+    data.expenses.filter(
+      (e) => e.status === status && (isAdmin || e.submitted_by === user?.id)
+    ).length;
   const counts = {
-    pending: data.expenses.filter((e) => e.status === "pending" && (isAdmin || e.submitted_by === user?.id)).length,
-    approved: data.expenses.filter((e) => e.status === "approved" && (isAdmin || e.submitted_by === user?.id)).length,
-    rejected: data.expenses.filter((e) => e.status === "rejected" && (isAdmin || e.submitted_by === user?.id)).length,
+    pending: ownPendingOrRejected("pending"),
+    approved: data.expenses.filter((e) => e.status === "approved").length,
+    rejected: ownPendingOrRejected("rejected"),
   };
 
   return (
