@@ -1,29 +1,42 @@
-## Diagnosis
+## Problem
 
-The admin allowlist is working: the three emails from your screenshot are saved in `signup_allowlist`, and the signup trigger correctly allows listed emails.
+A signed-in member sees the Bazar page but no "Submit bazar" button. They can't add, edit, or delete their own bazar entries.
 
-The real failure is Supabase Auth returning `429: email rate limit exceeded` on `/signup` while sending confirmation emails. This is not caused by the app’s allowlist logic.
+## Root cause
+
+Two separate gates:
+
+1. **Frontend:** In `src/pages/Bazar.tsx` the Submit button and the Delete button are gated on `isContributor` / `isAdmin`. `isContributor` requires the `bazar_contributor` role — plain `member` users never qualify.
+2. **Backend (RLS on `expenses`):** The `INSERT` policy requires `admin/super_admin` or `bazar_contributor`. The `UPDATE` / `DELETE` policies are admin-only. So even if the UI showed the button, the DB would reject a member.
+
+The existing `enforce_expense_submission` trigger already forces non-admin inserts to `status='pending'`, so opening this up is safe.
 
 ## Plan
 
-1. **Fix the immediate signup flow**
-   - Update the app so successful signups show a clearer message when Supabase creates the account but email delivery is rate-limited.
-   - Improve the error copy so users/admins understand this is an auth email sending limit, not “email not allowed”.
+### 1. Database (RLS on `expenses`)
 
-2. **Remove the confirmation-email bottleneck for testing**
-   - Apply a Supabase Auth configuration change so invited/allowlisted users can sign up and then sign in without being blocked by confirmation email rate limits.
-   - This is appropriate for your “fresh start / test the whole system” phase.
+Allow any authenticated user to:
+- **INSERT** an expense (trigger forces `pending` + sets `submitted_by`).
+- **UPDATE** their own row only while `status = 'pending'` and the month isn't closed.
+- **DELETE** their own row only while `status = 'pending'` and the month isn't closed.
 
-3. **Keep allowlist security intact**
-   - Do not weaken the `signup_allowlist` trigger.
-   - Unlisted visitors will still be rejected before they can create usable accounts.
+Admin policies stay unchanged. Approved/rejected entries become read-only for the member (admin can still edit/delete).
 
-4. **Validate after changes**
-   - Confirm the allowlist still contains the approved emails.
-   - Check recent auth logs after a test signup to confirm the `429` is gone or no longer blocks login.
+### 2. Frontend (`src/pages/Bazar.tsx`)
 
-## Technical notes
+- Show the **Submit bazar** button to every signed-in user (not just `isContributor`).
+- Add an **Edit** action for the member on rows where `submitted_by === user.id && status === 'pending'`. Reuses the same dialog.
+- Show the **Delete** (trash) button for the member on their own `pending` rows. Admins keep delete on everything.
+- Approved/rejected rows owned by the member render read-only (status badge + review note already shown).
 
-- The error is from Supabase Auth email confirmation sending, not from your database table.
-- The practical fix is to disable/avoid email confirmation during testing, or later configure a proper auth email sender/domain if you want confirmation emails in production.
-- I will avoid touching unrelated pages or data.
+### 3. No changes to
+
+- `bazar_contributor` role — keeps working as a convenience role, but is no longer required.
+- Auth, allowlist, signup flow, other pages.
+
+## Validation
+
+- As member: Submit bazar → row appears with `Pending` badge; Edit and Delete buttons visible.
+- As member: After admin approves → Edit/Delete buttons disappear on that row.
+- As admin (desktop): existing review/approve/delete flow unchanged; member-submitted row appears in Pending tab.
+- DB check: a member trying to UPDATE someone else's row or a non-pending row is rejected by RLS.
