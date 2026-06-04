@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
 import { useSearchParams } from "react-router-dom";
