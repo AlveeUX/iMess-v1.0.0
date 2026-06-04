@@ -61,30 +61,57 @@ const Bazar = () => {
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as "pending" | "approved" | "rejected" | "all") ?? "all";
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState("");
-  const [form, setForm] = useState({
+  const blankForm = () => ({
     title: "",
     amount: "",
     category: "bazar",
     date: format(new Date(), "yyyy-MM-dd"),
   });
+  const [form, setForm] = useState(blankForm());
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(blankForm());
+    setOpen(true);
+  };
+
+  const openEdit = (e: any) => {
+    setEditingId(e.id);
+    setForm({
+      title: e.title,
+      amount: String(e.amount),
+      category: e.category,
+      date: e.date,
+    });
+    setOpen(true);
+  };
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     const parsed = schema.safeParse({ ...form, amount: parseFloat(form.amount) });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
-    const { error } = await supabase.from("expenses").insert({
+    const payload = {
       title: form.title.trim(),
       amount: parseFloat(form.amount),
       category: form.category,
       date: form.date,
-    });
-    if (error) return toast.error(error.message);
-    toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    };
+    if (editingId) {
+      const { error } = await supabase.from("expenses").update(payload).eq("id", editingId);
+      if (error) return toast.error(error.message);
+      toast.success("Bazar updated");
+    } else {
+      const { error } = await supabase.from("expenses").insert(payload);
+      if (error) return toast.error(error.message);
+      toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    }
     qc.invalidateQueries({ queryKey: ["month-data"] });
     setOpen(false);
-    setForm({ title: "", amount: "", category: "bazar", date: format(new Date(), "yyyy-MM-dd") });
+    setEditingId(null);
+    setForm(blankForm());
   };
 
   const review = async (status: "approved" | "rejected") => {
