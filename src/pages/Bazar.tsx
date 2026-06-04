@@ -269,7 +269,10 @@ const Bazar = () => {
                     {statusBadge(e.status)}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {format(new Date(e.date), "MMM d")} · {e.category}
+                    {format(new Date(e.date), "MMM d")} · {e.category} · by{" "}
+                    <span className="text-foreground/80 font-medium">
+                      {e.submitted_by === user?.id ? "You" : nameOf(e.submitted_by)}
+                    </span>
                     {e.review_note && ` · "${e.review_note}"`}
                   </div>
                 </div>
