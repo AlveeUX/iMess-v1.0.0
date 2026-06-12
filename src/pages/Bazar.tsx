@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil, Info } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
 import { useSearchParams, Link } from "react-router-dom";
@@ -56,7 +56,7 @@ const statusBadge = (status: string) => {
 
 const Bazar = () => {
   const { data, isLoading } = useMonthData();
-  const { isAdmin, isContributor, user } = useAuth();
+  const { isAdmin, isContributor, user, memberId } = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as "pending" | "approved" | "rejected" | "all") ?? "all";
@@ -227,10 +227,20 @@ const Bazar = () => {
                   <Label>Date</Label>
                   <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 </div>
-                {!isAdmin && !editingId && (
-                  <p className="text-xs text-muted-foreground">
-                    Your submission will be marked <strong>pending</strong> until admin approves it.
-                  </p>
+                {!editingId && (
+                  <div className={`flex gap-2 rounded-md border p-3 text-xs ${memberId ? "border-primary/30 bg-primary/5 text-foreground" : "border-warning/40 bg-warning/5 text-foreground"}`}>
+                    <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                    {memberId ? (
+                      <span>
+                        This will also be recorded as a <strong>৳{form.amount || "0"} deposit</strong> under your profile (method: <em>bazar</em>). No need to add it twice.
+                        {!isAdmin && <> Status stays <strong>pending</strong> until an admin approves.</>}
+                      </span>
+                    ) : (
+                      <span>
+                        Your account isn't linked to a member yet, so this bazar won't auto-create a deposit. Ask an admin to link your account in Settings.
+                      </span>
+                    )}
+                  </div>
                 )}
                 <Button type="submit" className="w-full" size="lg">
                   {editingId ? "Save changes" : isAdmin ? "Save bazar" : "Submit for approval"}
