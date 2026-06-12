@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { z } from "zod";
 import { useMonthData } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
+import { Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";

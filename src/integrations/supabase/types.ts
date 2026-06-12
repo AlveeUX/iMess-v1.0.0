@@ -265,6 +265,7 @@ export type Database = {
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          source_expense_id: string | null
           status: string
           submitted_at: string
           submitted_by: string | null
@@ -280,6 +281,7 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_expense_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
@@ -295,6 +297,7 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_expense_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
@@ -305,6 +308,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposits_source_expense_id_fkey"
+            columns: ["source_expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
             referencedColumns: ["id"]
           },
         ]
