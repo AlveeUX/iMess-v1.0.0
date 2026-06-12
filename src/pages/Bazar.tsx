@@ -270,9 +270,18 @@ const Bazar = () => {
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {format(new Date(e.date), "MMM d")} · {e.category} · by{" "}
-                    <span className="text-foreground/80 font-medium">
-                      {e.submitted_by === user?.id ? "You" : nameOf(e.submitted_by)}
-                    </span>
+                    {e.submitted_by === user?.id ? (
+                      <span className="text-foreground/80 font-medium">You</span>
+                    ) : e.submitted_by ? (
+                      <Link
+                        to={`/bazar/member/${e.submitted_by}`}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        {nameOf(e.submitted_by)}
+                      </Link>
+                    ) : (
+                      <span className="text-foreground/80 font-medium">—</span>
+                    )}
                     {e.review_note && ` · "${e.review_note}"`}
                   </div>
                 </div>
