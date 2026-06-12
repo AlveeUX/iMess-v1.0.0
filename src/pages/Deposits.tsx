@@ -256,12 +256,18 @@ const Deposits = () => {
             .map((d) => {
               const m = data.members.find((x) => x.id === d.member_id);
               const status = d.status ?? "approved";
+              const isAuto = !!d.source_expense_id;
               return (
                 <div key={d.id} className="flex items-center justify-between p-4 gap-3 flex-wrap">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{m?.name}</span>
                       {statusBadge(status)}
+                      {isAuto && (
+                        <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/30">
+                          From bazar
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {format(new Date(d.date), "MMM d")} · {d.method}
@@ -271,14 +277,17 @@ const Deposits = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold tabular-nums">৳{fmtMoney(Number(d.amount))}</span>
-                    {isAdmin && status === "pending" && !locked && (
+                    {isAdmin && status === "pending" && !locked && !isAuto && (
                       <Button size="sm" onClick={() => { setReviewing(d); setReviewNote(""); }}>Review</Button>
                     )}
-                    {((isAdmin && !locked) ||
+                    {!isAuto && ((isAdmin && !locked) ||
                       (!isAdmin && status === "pending" && d.submitted_by === user?.id && !locked)) && (
                       <Button size="icon" variant="ghost" aria-label="Delete deposit" onClick={() => remove(d.id)}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
+                    )}
+                    {isAuto && (
+                      <span className="text-xs text-muted-foreground italic">Edit on Bazar</span>
                     )}
                   </div>
                 </div>
