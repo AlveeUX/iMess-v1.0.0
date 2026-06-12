@@ -30,7 +30,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 
 const schema = z.object({
   title: z.string().trim().min(1, "Title required").max(80),
