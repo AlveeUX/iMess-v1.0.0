@@ -15,6 +15,7 @@ import Expenses from "./pages/Expenses";
 import Report from "./pages/Report";
 import Settings from "./pages/Settings";
 import Bazar from "./pages/Bazar";
+import BazarMemberProfile from "./pages/BazarMemberProfile";
 import Bills from "./pages/Bills";
 import Transparency from "./pages/Transparency";
 import Corrections from "./pages/Corrections";
