@@ -169,27 +169,7 @@ export const useMonthData = (date: Date = new Date()) => {
         awayByMemberDate,
       };
 
-        approvedExpenses,
-        pendingExpenses,
-        rejectedExpenses,
-        members: members.data ?? [],
-        totalMeals,
-        totalExpense,
-        pendingTotal,
-        totalDeposits,
-        rate,
-        liveRate,
-        isClosed,
-        monthRow: monthRow.data,
-        perMember,
-        pendingCount: pendingExpenses.length,
-        advanceBalance: perMember.reduce((s, m) => s + Math.max(0, m.balance), 0),
-        dueBalance: perMember.reduce((s, m) => s + Math.max(0, -m.balance), 0),
-        rentCollected,
-        rentUnpaid,
-        utilCollected,
-        utilUnpaid,
-      };
+
     },
   });
 };
