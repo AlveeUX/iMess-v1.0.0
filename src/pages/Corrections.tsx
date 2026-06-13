@@ -60,6 +60,36 @@ const Corrections = () => {
     },
   });
 
+  const { data: awayRows } = useQuery({
+    queryKey: ["away-requests"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("member_away_periods")
+        .select("*, members(name)")
+        .in("status", ["pending", "rejected"])
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  const reviewAway = async (id: string, approve: boolean, note?: string) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("member_away_periods")
+      .update({
+        status: approve ? "approved" : "rejected",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note?.trim() || null,
+      })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success(approve ? "Away period approved" : "Away period rejected");
+    qc.invalidateQueries({ queryKey: ["away-requests"] });
+    qc.invalidateQueries({ queryKey: ["month-data"] });
+  };
+
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.error("Sign in first");
