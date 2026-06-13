@@ -124,21 +124,18 @@ export const useMonthData = (date: Date = new Date()) => {
       // Away periods → awayByMemberDate map (member_id -> Set<yyyy-MM-dd>)
       const awayRows = (awayRes.data ?? []) as any[];
       const awayByMemberDate = new Map<string, Set<string>>();
-      const rangeStart = new Date(r.start);
-      const rangeEnd = new Date(r.end);
       for (const a of awayRows) {
         const s = new Date(a.start_date < r.start ? r.start : a.start_date);
         const e = new Date(a.end_date > r.end ? r.end : a.end_date);
         const set = awayByMemberDate.get(a.member_id) ?? new Set<string>();
         const d = new Date(s);
         while (d <= e) {
-          const key = d.toISOString().slice(0, 10);
-          set.add(key);
+          set.add(d.toISOString().slice(0, 10));
           d.setDate(d.getDate() + 1);
         }
         awayByMemberDate.set(a.member_id, set);
-        void rangeStart; void rangeEnd;
       }
+
 
       return {
         range: r,
