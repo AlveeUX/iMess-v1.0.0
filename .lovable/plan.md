@@ -1,63 +1,96 @@
-## Goal
+# Explicit 0-meal entries + Away periods
 
-When a member (or admin) submits a bazar/expense, automatically create a matching **deposit** under their profile — so contributors don't have to record the same money twice. The deposit's status mirrors the bazar entry: pending → approved → rejected (or back to pending on edit).
+## 1. Explicit 0 meal entries
 
-This removes the biggest pain point: contributors currently add a bazar AND must also add a deposit to get credit for the money they spent.
+Today, saving 0 on a day deletes the row, so the cell shows "—" and nobody can tell whether you skipped or just forgot. We'll change it so 0 is a real, saved value.
 
-## Behavior
+- **Save behavior**: Saving `0` upserts a `meals` row with `meal_count = 0` instead of deleting. Deleting still works (a new "Clear day" button) to remove the entry entirely.
+- **Calendar rendering**: Day with `0` shows a neutral "0" pill (muted color, distinct from "—" empty and the primary-blue count pill). Empty days keep showing "—".
+- **Totals**: Unchanged (sum of meal_count; 0 contributes 0).
 
-### On submit bazar
-- If the submitter's user account is linked to a member (`member_links`), the system also creates a `deposits` row with:
-  - `member_id` = linked member
-  - `amount` = bazar amount
-  - `date` = bazar date
-  - `method` = `bazar` (new method label so it's visually distinct)
-  - `note` = "Auto: <bazar title>"
-  - `status` = `pending` (mirrors the bazar)
-  - `submitted_by` = submitter
-  - new column `source_expense_id` = bazar row id (1:1 link, used to keep them in sync)
-- If the submitter has no linked member: bazar is still created, no auto-deposit. A small UI hint suggests linking their account.
+## 2. Away periods
 
-### On bazar status change
-- Approved → linked deposit set to `approved` (same reviewer, note prefixed "Auto-approved with bazar").
-- Rejected → linked deposit set to `rejected` (so it doesn't inflate balances).
-- Edited (amount/date/title) while pending → linked deposit updated to match.
-- Deleted → linked deposit deleted.
+A new way to mark "I won't be eating from X to Y". Days inside an away period auto-show as 0 meals on the calendar with an "Away" overlay, and totals treat them as 0. Bills, rent, member list — untouched.
 
-All of the above is done by a single Postgres trigger on `expenses` — no client logic needed, no race conditions, works for admin and member submissions.
+### Storage
 
-### Standalone deposits
-- The Deposits page keeps its existing "Submit deposit" flow unchanged (for cash handed to admin with no bazar attached). Users see both: auto-deposits from bazar (method = `bazar`) and manual ones.
+New table `member_away_periods`:
+- `member_id` (FK members)
+- `start_date`, `end_date` (date, inclusive)
+- `note` (text, optional reason)
+- `status`: `approved` | `pending` (for request flow)
+- `created_by`, `reviewed_by`, `reviewed_at`, `review_note`
+- timestamps
 
-### Visibility & edit rules (unchanged from current rules)
-- Everyone signed in sees all approved deposits + their own pending/rejected (already in place).
-- Members can only edit/delete their **own** deposits while pending — auto-deposits inherit the same rule via `submitted_by`. They edit the bazar; the trigger updates the deposit.
-- Admins can edit/delete anything.
+RLS:
+- Everyone authenticated can `SELECT` (members see each other's away periods, same pattern as meals/deposits).
+- Member can `INSERT` their own period for future dates only (auto-approved).
+- Member's `INSERT` for a range that touches past or closed-month dates is forced to `status='pending'` via a trigger.
+- Admins can insert/update/delete/approve any range.
+- Members can delete their own future, still-approved periods.
 
-## Technical details
+### Self-serve vs request (the "Both" rule)
 
-### Migration
-1. `ALTER TABLE public.deposits ADD COLUMN source_expense_id uuid REFERENCES public.expenses(id) ON DELETE CASCADE;`
-2. Unique partial index so one bazar maps to at most one deposit:
-   `CREATE UNIQUE INDEX deposits_source_expense_uniq ON public.deposits(source_expense_id) WHERE source_expense_id IS NOT NULL;`
-3. New trigger function `public.sync_bazar_deposit()` on `expenses` (AFTER INSERT/UPDATE/DELETE):
-   - INSERT: if `submitted_by` has a `member_links` row, insert deposit (bypasses `enforce_deposit_submission` because trigger runs as SECURITY DEFINER and sets `status` explicitly).
-   - UPDATE: locate the linked deposit by `source_expense_id`; mirror `status`, `amount`, `date`, `reviewed_by`, `reviewed_at`, `review_note` (prefixed). If no linked deposit exists yet but submitter became linked, create it.
-   - DELETE: cascade handles it via FK.
-4. `enforce_deposit_submission` skips overriding status when the row has `source_expense_id IS NOT NULL` and the caller is the sync trigger (use `current_setting('app.sync_bazar', true)` flag set inside the function).
-5. RLS on `deposits` already allows owner to read; auto-deposit's `submitted_by` is the same user, so it appears under their profile automatically.
+Enforced by a `BEFORE INSERT/UPDATE` trigger on `member_away_periods`:
+- If `start_date >= today` AND no day in the range is in a closed month AND the caller is the member → `status = 'approved'`.
+- Otherwise (range includes past dates, or a closed month, or someone else's member) and caller is not admin → `status = 'pending'`. Admin must approve from the Requests page.
 
-### Frontend
-- `Bazar.tsx`: add a small inline notice in the submit dialog: "This will be recorded as a ৳X deposit under your name." Show only if the user is linked to a member. If not linked, show "Link your account to a member in Settings to also get deposit credit."
-- `Deposits.tsx`: when rendering a row with `method === "bazar"`, show a small badge "From bazar" and link the row to the bazar entry. The row is read-only on this page (edits happen via Bazar) — hide edit/delete for auto-deposits; instead show a tooltip "Edit the bazar entry to change this".
-- No changes to `Auth`, allowlist, other pages.
+### Effect on meals
 
-## Validation
+We do **not** bulk-insert 0 rows. Instead:
+- Calendar overlay: any day inside an approved away period renders as an "Away" cell (muted background, "Away" label, count treated as 0).
+- `useMonthData` fetches approved away periods for the month and exposes `awayByMemberDate: Map<member_id, Set<date>>`. Per-member meal total subtracts any meal rows that fall inside an away period (defensive; normally there are none) and reports the displayed 0s.
+- Editing a day inside an approved away period is blocked in the UI (toast: "This day is inside an away period — remove the period first to edit"). Admin can still override.
 
-- Member submits bazar ৳500 → bazar row pending + deposit row pending (method=bazar) appears on both pages.
-- Admin approves bazar → both rows flip to approved; member's monthly deposit total goes up by ৳500.
-- Admin rejects bazar → both rows rejected; deposit total unchanged.
-- Member edits bazar amount ৳500 → ৳600 (still pending) → linked deposit also becomes ৳600.
-- Member deletes bazar → linked deposit deleted (FK cascade).
-- Member without a `member_links` row submits bazar → bazar created, no deposit (UI showed the warning).
-- Manual deposit on Deposits page still works as before, no source link.
+### Surfaces
+
+- **Meals page**: New "Away" button next to the month nav opens a small dialog: start date, end date, optional note → submits. Shows the member's active/pending away periods as chips below the calendar with a delete (✕) button (own future approved ones only; pending ones cancellable by the requester).
+- **Corrections/Requests page**: Pending away periods appear as a new request kind ("Away period: Jun 14 → Jun 20"). Admin approves via the existing review dialog; on approve we set `status='approved'` on the away row (no `apply_correction` needed — separate handler since it's its own table).
+- **Day cell**: Inside an away period → muted background, small "Away" label, no meal pill, not clickable for non-admins.
+
+## Technical notes
+
+### Migration outline (one migration)
+```sql
+CREATE TABLE public.member_away_periods (
+  id uuid PK default gen_random_uuid(),
+  member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  start_date date NOT NULL,
+  end_date   date NOT NULL CHECK (end_date >= start_date),
+  note text,
+  status text NOT NULL DEFAULT 'approved' CHECK (status IN ('approved','pending','rejected')),
+  created_by uuid,
+  reviewed_by uuid,
+  reviewed_at timestamptz,
+  review_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.member_away_periods TO authenticated;
+GRANT ALL ON public.member_away_periods TO service_role;
+ALTER TABLE public.member_away_periods ENABLE ROW LEVEL SECURITY;
+
+-- Policies: SELECT for all authenticated; INSERT if caller owns member or is admin;
+-- UPDATE/DELETE if admin OR (own row AND status<>'rejected' AND start_date > today).
+-- Trigger enforce_away_submission: forces status='pending' for non-admin when range
+-- touches past or closed-month dates; else 'approved'. Sets created_by = auth.uid().
+-- Trigger update_updated_at_column on UPDATE.
+-- Trigger log_change for activity logs.
+```
+Index on `(member_id, start_date, end_date)`.
+
+### Frontend changes
+- `src/pages/Meals.tsx`:
+  - Save 0 as upsert instead of delete; add "Clear day" button to dialog.
+  - Render 0-pill (neutral) vs empty "—".
+  - "Away" button + dialog (start/end/note).
+  - Render away-period overlay on day cells; block edit inside approved away period for non-admins.
+  - Show member's away chips with delete affordance.
+- `src/hooks/useMessData.ts`: fetch `member_away_periods` (status='approved') for the month, return `awayByMemberDate`.
+- `src/pages/Corrections.tsx`: list pending away periods alongside correction requests; approve sets `status='approved'`, reject sets `status='rejected'`.
+- `src/integrations/supabase/types.ts`: regenerated automatically after migration.
+
+### Out of scope
+- No change to bills, rent, or `members.is_active`.
+- No bulk 0-meal row writes for away periods.
+- No edit-history UI for away periods beyond what `activity_logs` already captures.
