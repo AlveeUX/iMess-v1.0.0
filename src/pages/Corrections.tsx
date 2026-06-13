@@ -312,6 +312,52 @@ const Corrections = () => {
         </div>
       )}
 
+      {(awayRows?.length ?? 0) > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold mt-6">Away period requests</h2>
+          {awayRows!.map((a: any) => {
+            const meta = statusMeta[a.status] ?? statusMeta.open;
+            const label = a.status === "pending" ? "Pending" : meta.label;
+            const cls = a.status === "pending" ? statusMeta.open.cls : meta.cls;
+            return (
+              <Card key={a.id} className="p-4 gradient-card border-border/50 shadow-card">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <Badge variant="outline" className={cls}>{label}</Badge>
+                      <span className="text-xs text-muted-foreground">Away period</span>
+                      <span className="text-xs text-muted-foreground">
+                        · {format(new Date(a.created_at), "MMM d, h:mm a")}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-primary">
+                      {a.members?.name ?? "Member"}: {format(new Date(a.start_date), "MMM d")} → {format(new Date(a.end_date), "MMM d, yyyy")}
+                    </p>
+                    {a.note && <p className="text-sm mt-1">{a.note}</p>}
+                    {a.review_note && (
+                      <p className="text-xs text-muted-foreground mt-2 italic">
+                        Admin note: {a.review_note}
+                      </p>
+                    )}
+                  </div>
+                  {isAdmin && a.status === "pending" && (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => reviewAway(a.id, false)}>
+                        <X className="w-4 h-4 mr-1" /> Reject
+                      </Button>
+                      <Button size="sm" onClick={() => reviewAway(a.id, true)}>
+                        <Check className="w-4 h-4 mr-1" /> Approve
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+
       <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) setReviewing(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Review request</DialogTitle></DialogHeader>
