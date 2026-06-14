@@ -466,6 +466,12 @@ const Bills = () => {
           onSetStatus={adminSetStatus}
           items={items}
           bills={bills}
+          editingId={editingId}
+          editValue={editValue}
+          setEditValue={setEditValue}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={trySaveEdit}
         />
       ) : (
         <MemberView
