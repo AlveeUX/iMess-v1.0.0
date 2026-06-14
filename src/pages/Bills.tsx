@@ -765,7 +765,17 @@ const AdminView = ({
                         <TableCell className="text-muted-foreground">
                           {m?.seat_name || (m?.room ? `Room ${m.room}` : "—")}
                         </TableCell>
-                        <TableCell className="text-right font-mono">{fmt(it.amount)}</TableCell>
+                        <TableCell className="text-right">
+                          <EditableAmount
+                            item={it}
+                            editingId={editingId}
+                            editValue={editValue}
+                            setEditValue={setEditValue}
+                            onStart={onStartEdit}
+                            onCancel={onCancelEdit}
+                            onSave={onSaveEdit}
+                          />
+                        </TableCell>
                         <TableCell>{b.due_month?.slice(0, 7) ?? b.due_date}</TableCell>
                         <TableCell><StatusBadge s={it.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{it.paid_on ?? "—"}</TableCell>
