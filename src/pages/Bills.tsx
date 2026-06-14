@@ -425,7 +425,6 @@ const Bills = () => {
       return;
     }
     toast({ title: "Default rent updated" });
-    queryClient.invalidateQueries({ queryKey: ["members"] });
     setRentDefaultPrompt(null);
     refresh();
   };
