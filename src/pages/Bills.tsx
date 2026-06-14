@@ -304,6 +304,65 @@ const Bills = () => {
     load();
   };
 
+  // ---- Admin: edit bill item amount ----
+  const startEdit = (it: BillItem) => {
+    setEditingId(it.id);
+    setEditValue(String(it.amount));
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+  const trySaveEdit = (it: BillItem) => {
+    const n = Number(editValue);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast({ title: "Invalid amount", description: "Enter a number greater than 0", variant: "destructive" });
+      return;
+    }
+    if (n === Number(it.amount)) {
+      cancelEdit();
+      return;
+    }
+    if (it.status === "paid") {
+      setPaidConfirm({ item: it, amount: n });
+      return;
+    }
+    void commitEdit(it, n);
+  };
+  const commitEdit = async (it: BillItem, n: number) => {
+    const { error } = await supabase.from("bill_items").update({ amount: n }).eq("id", it.id);
+    if (error) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Amount updated" });
+    cancelEdit();
+    setPaidConfirm(null);
+    // For rent bills, offer to update the member default
+    const bill = bills.find((b) => b.id === it.bill_id);
+    if (bill?.bill_type === "rent") {
+      const m = memberMap[it.member_id];
+      if (m && Number(m.rent_amount) !== n) {
+        setRentDefaultPrompt({ memberId: it.member_id, memberName: m.name, amount: n });
+      }
+    }
+    load();
+  };
+  const updateMemberDefaultRent = async () => {
+    if (!rentDefaultPrompt) return;
+    const { error } = await supabase
+      .from("members")
+      .update({ rent_amount: rentDefaultPrompt.amount })
+      .eq("id", rentDefaultPrompt.memberId);
+    if (error) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Default rent updated" });
+    setRentDefaultPrompt(null);
+    load();
+  };
+
   // ---- Member: request review or cancel ----
   const memberToggleRequest = async (item: BillItem) => {
     const next = item.status === "pending_review" ? "unpaid" : "pending_review";
