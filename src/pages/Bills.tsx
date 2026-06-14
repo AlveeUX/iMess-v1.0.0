@@ -715,6 +715,12 @@ const AdminView = ({
   onSetStatus,
   items,
   bills,
+  editingId,
+  editValue,
+  setEditValue,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
 }: any) => {
   return (
     <Tabs defaultValue="rent" className="space-y-4">
