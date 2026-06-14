@@ -94,6 +94,60 @@ const StatusBadge = ({ s }: { s: BillItem["status"] }) => {
   return <Badge variant="secondary">Unpaid</Badge>;
 };
 
+const EditableAmount = ({
+  item,
+  editingId,
+  editValue,
+  setEditValue,
+  onStart,
+  onCancel,
+  onSave,
+}: {
+  item: BillItem;
+  editingId: string | null;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  onStart: (it: BillItem) => void;
+  onCancel: () => void;
+  onSave: (it: BillItem) => void;
+}) => {
+  if (editingId === item.id) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <Input
+          autoFocus
+          type="number"
+          step="0.01"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave(item);
+            if (e.key === "Escape") onCancel();
+          }}
+          className="h-8 w-24 text-right font-mono"
+        />
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onSave(item)} title="Save">
+          <Check className="w-4 h-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancel} title="Cancel">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onStart(item)}
+      className="inline-flex items-center gap-1 font-mono hover:text-primary group"
+      title="Edit amount"
+    >
+      {fmt(item.amount)}
+      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  );
+};
+
 const Bills = () => {
   const { isAdmin, memberId } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
