@@ -106,6 +106,14 @@ const Bills = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailBill, setDetailBill] = useState<Bill | null>(null);
 
+  // Amount editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [paidConfirm, setPaidConfirm] = useState<{ item: BillItem; amount: number } | null>(null);
+  const [rentDefaultPrompt, setRentDefaultPrompt] = useState<
+    { memberId: string; memberName: string; amount: number } | null
+  >(null);
+
   // rent form
   const [rMember, setRMember] = useState("");
   const [rTitle, setRTitle] = useState("Monthly Rent");
