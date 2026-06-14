@@ -41,7 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Check, Plus, Trash2, Receipt, Home, Zap, ClipboardCheck, X, Clock } from "lucide-react";
+import { Check, Plus, Trash2, Receipt, Home, Zap, ClipboardCheck, X, Clock, Pencil } from "lucide-react";
 
 type Member = {
   id: string;
