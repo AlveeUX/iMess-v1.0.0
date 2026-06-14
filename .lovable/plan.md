@@ -1,96 +1,66 @@
-# Explicit 0-meal entries + Away periods
+# Admin edit of bill amounts
 
-## 1. Explicit 0 meal entries
+Let admins change the ৳ amount on any row in the Bills page — both Rent bills and Utility bills tabs — and have it reflected everywhere those amounts feed into (bill totals, Paid/Unpaid cards, Report dues, member-wise dues).
 
-Today, saving 0 on a day deletes the row, so the cell shows "—" and nobody can tell whether you skipped or just forgot. We'll change it so 0 is a real, saved value.
+## Scope
 
-- **Save behavior**: Saving `0` upserts a `meals` row with `meal_count = 0` instead of deleting. Deleting still works (a new "Clear day" button) to remove the entry entirely.
-- **Calendar rendering**: Day with `0` shows a neutral "0" pill (muted color, distinct from "—" empty and the primary-blue count pill). Empty days keep showing "—".
-- **Totals**: Unchanged (sum of meal_count; 0 contributes 0).
+- Rent bills tab: edit per-member `bill_items.amount` for any row.
+- Utility bills tab: edit per-member `bill_items.amount` for any row.
+- Paid rows: editable, but require an "Are you sure?" confirmation (paid total is being rewritten).
+- Rent edits: after save, ask "Also update {Member}'s default rent amount for future bills?" (Yes / No).
+- Non-admins: no change — they still only see request-review / cancel flow.
 
-## 2. Away periods
+Out of scope: editing utility bill `total_amount` directly, editing dates/status from this control, bulk edits.
 
-A new way to mark "I won't be eating from X to Y". Days inside an away period auto-show as 0 meals on the calendar with an "Away" overlay, and totals treat them as 0. Bills, rent, member list — untouched.
+## UX
 
-### Storage
+In each row's Amount cell (admin only):
 
-New table `member_away_periods`:
-- `member_id` (FK members)
-- `start_date`, `end_date` (date, inclusive)
-- `note` (text, optional reason)
-- `status`: `approved` | `pending` (for request flow)
-- `created_by`, `reviewed_by`, `reviewed_at`, `review_note`
-- timestamps
-
-RLS:
-- Everyone authenticated can `SELECT` (members see each other's away periods, same pattern as meals/deposits).
-- Member can `INSERT` their own period for future dates only (auto-approved).
-- Member's `INSERT` for a range that touches past or closed-month dates is forced to `status='pending'` via a trigger.
-- Admins can insert/update/delete/approve any range.
-- Members can delete their own future, still-approved periods.
-
-### Self-serve vs request (the "Both" rule)
-
-Enforced by a `BEFORE INSERT/UPDATE` trigger on `member_away_periods`:
-- If `start_date >= today` AND no day in the range is in a closed month AND the caller is the member → `status = 'approved'`.
-- Otherwise (range includes past dates, or a closed month, or someone else's member) and caller is not admin → `status = 'pending'`. Admin must approve from the Requests page.
-
-### Effect on meals
-
-We do **not** bulk-insert 0 rows. Instead:
-- Calendar overlay: any day inside an approved away period renders as an "Away" cell (muted background, "Away" label, count treated as 0).
-- `useMonthData` fetches approved away periods for the month and exposes `awayByMemberDate: Map<member_id, Set<date>>`. Per-member meal total subtracts any meal rows that fall inside an away period (defensive; normally there are none) and reports the displayed 0s.
-- Editing a day inside an approved away period is blocked in the UI (toast: "This day is inside an away period — remove the period first to edit"). Admin can still override.
-
-### Surfaces
-
-- **Meals page**: New "Away" button next to the month nav opens a small dialog: start date, end date, optional note → submits. Shows the member's active/pending away periods as chips below the calendar with a delete (✕) button (own future approved ones only; pending ones cancellable by the requester).
-- **Corrections/Requests page**: Pending away periods appear as a new request kind ("Away period: Jun 14 → Jun 20"). Admin approves via the existing review dialog; on approve we set `status='approved'` on the away row (no `apply_correction` needed — separate handler since it's its own table).
-- **Day cell**: Inside an away period → muted background, small "Away" label, no meal pill, not clickable for non-admins.
-
-## Technical notes
-
-### Migration outline (one migration)
-```sql
-CREATE TABLE public.member_away_periods (
-  id uuid PK default gen_random_uuid(),
-  member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  start_date date NOT NULL,
-  end_date   date NOT NULL CHECK (end_date >= start_date),
-  note text,
-  status text NOT NULL DEFAULT 'approved' CHECK (status IN ('approved','pending','rejected')),
-  created_by uuid,
-  reviewed_by uuid,
-  reviewed_at timestamptz,
-  review_note text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.member_away_periods TO authenticated;
-GRANT ALL ON public.member_away_periods TO service_role;
-ALTER TABLE public.member_away_periods ENABLE ROW LEVEL SECURITY;
-
--- Policies: SELECT for all authenticated; INSERT if caller owns member or is admin;
--- UPDATE/DELETE if admin OR (own row AND status<>'rejected' AND start_date > today).
--- Trigger enforce_away_submission: forces status='pending' for non-admin when range
--- touches past or closed-month dates; else 'approved'. Sets created_by = auth.uid().
--- Trigger update_updated_at_column on UPDATE.
--- Trigger log_change for activity logs.
+```text
+Rent bills                                 Utility bills
+┌────────────┐                              ┌────────────┐
+│ ৳4250.00 ✎ │  ← click pencil to edit      │ ৳1720.00 ✎ │
+└────────────┘                              └────────────┘
+        │
+        ▼ inline editor
+┌──────────────────────┐
+│ [ 4500.00 ] [✓] [✕] │
+└──────────────────────┘
 ```
-Index on `(member_id, start_date, end_date)`.
 
-### Frontend changes
-- `src/pages/Meals.tsx`:
-  - Save 0 as upsert instead of delete; add "Clear day" button to dialog.
-  - Render 0-pill (neutral) vs empty "—".
-  - "Away" button + dialog (start/end/note).
-  - Render away-period overlay on day cells; block edit inside approved away period for non-admins.
-  - Show member's away chips with delete affordance.
-- `src/hooks/useMessData.ts`: fetch `member_away_periods` (status='approved') for the month, return `awayByMemberDate`.
-- `src/pages/Corrections.tsx`: list pending away periods alongside correction requests; approve sets `status='approved'`, reject sets `status='rejected'`.
-- `src/integrations/supabase/types.ts`: regenerated automatically after migration.
+- Click pencil → cell becomes a numeric input + Save/Cancel.
+- Enter saves; Esc cancels.
+- If row.status = 'paid' → confirmation AlertDialog before write: "This bill is already marked Paid. Update the amount anyway?"
+- After a successful Rent save → AlertDialog: "Also set {member.name}'s default monthly rent to ৳{new}? Future rent bills will use this value." → Yes updates `members.rent_amount`; No leaves it.
+- After save: toast, refetch bills + month data so cards/Report update.
 
-### Out of scope
-- No change to bills, rent, or `members.is_active`.
-- No bulk 0-meal row writes for away periods.
-- No edit-history UI for away periods beyond what `activity_logs` already captures.
+## Data flow
+
+- Write: `update bill_items set amount = :new where id = :id` (admin RLS already allows). The `enforce_bill_item_member_update` trigger only restricts non-admins, so admin updates pass through.
+- Optional rent default: `update members set rent_amount = :new where id = :member_id`.
+- Activity log: existing `log_change` trigger on `bill_items` and `members` captures the diff, so it shows up in Transparency automatically — no new logging code.
+- Cache invalidation: invalidate the bills query in Bills.tsx and `["month-data", monthKey]` so:
+  - Bills page totals (Total Rent Due, Total Utility Due, Paid, Unpaid) recompute.
+  - Report's `rentUnpaid` / `utilUnpaid` / per-member `rentDue` / `utilityDue` recompute (already derived from bill_items in `useMonthData`).
+
+## Validation
+
+- Amount must be a number > 0 (block negatives and empty).
+- Reject save if value unchanged (no-op).
+- All errors → toast with Postgres error message.
+
+## Files to change
+
+- `src/pages/Bills.tsx`
+  - Add `EditableAmountCell` component used in both Rent and Utility tables (admin-only; non-admins keep the read-only `৳…` text).
+  - Add inline edit state per row id; Save handler calls supabase update, then opens "propagate to default?" dialog for rent rows.
+  - Add Paid-row AlertDialog.
+  - Invalidate `["bills", monthKey]` (or whichever key the page uses) and `["month-data", monthKey]` after save.
+- No schema or RLS changes needed.
+- No changes to Report.tsx / useMessData.ts — they already derive from `bill_items`.
+
+## Edge cases
+
+- Closed month: `bill_items` itself is not gated by `is_month_closed`; admins can still edit. We surface the bill's `due_month` as-is and don't block — matches existing admin override behavior elsewhere.
+- Concurrent edits: single-row update, last write wins (acceptable for this app's scale).
+- Member default rent change does not retroactively touch existing rent `bill_items` for other months — only the current row being edited.
