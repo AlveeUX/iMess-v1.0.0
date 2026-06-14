@@ -198,6 +198,16 @@ const Bills = () => {
     setLoading(false);
   };
 
+  // Reload local Bills state + invalidate downstream React Query caches
+  // (Report, Dashboard, Transparency, Members) so balances, dues, and rates refresh.
+  const refresh = async () => {
+    await load();
+    queryClient.invalidateQueries({ queryKey: ["month-data"] });
+    queryClient.invalidateQueries({ queryKey: ["members"] });
+    queryClient.invalidateQueries({ queryKey: ["month"] });
+    queryClient.invalidateQueries({ queryKey: ["corrections-open-count"] });
+  };
+
   useEffect(() => {
     load();
   }, []);
@@ -282,7 +292,7 @@ const Bills = () => {
     setRAmount("");
     setRTitle("Monthly Rent");
     setRNotes("");
-    load();
+    refresh();
   };
 
   // Auto-fill rent amount when member changes
@@ -333,7 +343,7 @@ const Bills = () => {
     setUTitle("");
     setUAmount("");
     setUNotes("");
-    load();
+    refresh();
   };
 
   const deleteBill = async (id: string) => {
@@ -341,7 +351,7 @@ const Bills = () => {
     if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
     toast({ title: "Bill deleted" });
     setDeleteId(null);
-    load();
+    refresh();
   };
 
   // ---- Admin: review payment ----
@@ -357,7 +367,7 @@ const Bills = () => {
     }
     const { error } = await supabase.from("bill_items").update(patch).eq("id", item.id);
     if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
-    load();
+    refresh();
   };
 
   // ---- Admin: edit bill item amount ----
@@ -392,7 +402,6 @@ const Bills = () => {
       return;
     }
     toast({ title: "Amount updated" });
-    queryClient.invalidateQueries({ queryKey: ["month-data"] });
     cancelEdit();
     setPaidConfirm(null);
     // For rent bills, offer to update the member default
@@ -403,7 +412,7 @@ const Bills = () => {
         setRentDefaultPrompt({ memberId: it.member_id, memberName: m.name, amount: n });
       }
     }
-    load();
+    refresh();
   };
   const updateMemberDefaultRent = async () => {
     if (!rentDefaultPrompt) return;
@@ -416,9 +425,8 @@ const Bills = () => {
       return;
     }
     toast({ title: "Default rent updated" });
-    queryClient.invalidateQueries({ queryKey: ["members"] });
     setRentDefaultPrompt(null);
-    load();
+    refresh();
   };
 
   // ---- Member: request review or cancel ----
@@ -429,7 +437,7 @@ const Bills = () => {
     toast({
       title: next === "pending_review" ? "Marked as paid — awaiting admin review" : "Request canceled",
     });
-    load();
+    refresh();
   };
 
   const memberLabel = (id: string) => {
