@@ -151,6 +151,7 @@ const EditableAmount = ({
 
 const Bills = () => {
   const { isAdmin, memberId } = useAuth();
+  const queryClient = useQueryClient();
   const [members, setMembers] = useState<Member[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [items, setItems] = useState<BillItem[]>([]);
