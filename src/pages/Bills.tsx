@@ -198,6 +198,16 @@ const Bills = () => {
     setLoading(false);
   };
 
+  // Reload local Bills state + invalidate downstream React Query caches
+  // (Report, Dashboard, Transparency, Members) so balances, dues, and rates refresh.
+  const refresh = async () => {
+    await load();
+    queryClient.invalidateQueries({ queryKey: ["month-data"] });
+    queryClient.invalidateQueries({ queryKey: ["members"] });
+    queryClient.invalidateQueries({ queryKey: ["month"] });
+    queryClient.invalidateQueries({ queryKey: ["corrections-open-count"] });
+  };
+
   useEffect(() => {
     load();
   }, []);
