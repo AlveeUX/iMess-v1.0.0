@@ -674,7 +674,21 @@ const Bills = () => {
                   {(itemsByBill[detailBill.id] ?? []).map((it) => (
                     <TableRow key={it.id}>
                       <TableCell>{memberLabel(it.member_id)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(it.amount)}</TableCell>
+                      <TableCell className="text-right">
+                        {isAdmin ? (
+                          <EditableAmount
+                            item={it}
+                            editingId={editingId}
+                            editValue={editValue}
+                            setEditValue={setEditValue}
+                            onStart={startEdit}
+                            onCancel={cancelEdit}
+                            onSave={trySaveEdit}
+                          />
+                        ) : (
+                          <span className="font-mono">{fmt(it.amount)}</span>
+                        )}
+                      </TableCell>
                       <TableCell><StatusBadge s={it.status} /></TableCell>
                       <TableCell className="text-muted-foreground">{it.paid_on ?? "—"}</TableCell>
                       {isAdmin && (
