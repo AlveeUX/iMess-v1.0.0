@@ -392,6 +392,7 @@ const Bills = () => {
       return;
     }
     toast({ title: "Amount updated" });
+    queryClient.invalidateQueries({ queryKey: ["month-data"] });
     cancelEdit();
     setPaidConfirm(null);
     // For rent bills, offer to update the member default
