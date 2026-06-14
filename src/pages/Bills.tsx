@@ -712,6 +712,44 @@ const Bills = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirm edit on Paid row */}
+      <AlertDialog open={!!paidConfirm} onOpenChange={(o) => !o && setPaidConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit a paid bill?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This bill is already marked Paid. Updating the amount will overwrite the paid value.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => paidConfirm && commitEdit(paidConfirm.item, paidConfirm.amount)}
+            >
+              Update anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Propagate to member default rent */}
+      <AlertDialog open={!!rentDefaultPrompt} onOpenChange={(o) => !o && setRentDefaultPrompt(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update default rent?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Also set {rentDefaultPrompt?.memberName}'s default monthly rent to{" "}
+              {rentDefaultPrompt ? fmt(rentDefaultPrompt.amount) : ""}? Future rent bills will use
+              this value. The current bill has already been updated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, just this bill</AlertDialogCancel>
+            <AlertDialogAction onClick={updateMemberDefaultRent}>Yes, update default</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
