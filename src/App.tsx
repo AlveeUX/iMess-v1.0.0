@@ -19,6 +19,7 @@ import BazarMemberProfile from "./pages/BazarMemberProfile";
 import Bills from "./pages/Bills";
 import Transparency from "./pages/Transparency";
 import Corrections from "./pages/Corrections";
+import ReleaseNotes from "./pages/ReleaseNotes";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/transparency" element={<Transparency />} />
               <Route path="/corrections" element={<Corrections />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/release-notes" element={<ReleaseNotes />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
