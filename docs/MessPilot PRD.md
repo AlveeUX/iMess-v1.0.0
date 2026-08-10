@@ -1,8 +1,8 @@
 # MessPilot — Product Requirements Document
 
 **Status:** Live · MVP in production
-**Document version:** 1.0 — as-built
-**Prepared:** 10 Aug 2026
+**Document version:** 1.1 — as-built
+**Prepared:** 11 Aug 2026
 **Stack:** React + Supabase
 
 ---
@@ -17,10 +17,11 @@
 6. [Data model](#6-data-model)
 7. [Approval workflows](#7-approval-workflows)
 8. [Technical architecture](#8-technical-architecture)
-9. [Non-functional requirements](#9-non-functional-requirements)
-10. [Known gaps](#10-known-gaps)
-11. [Roadmap](#11-roadmap)
-12. [Glossary](#12-glossary)
+9. [Branding](#9-branding)
+10. [Non-functional requirements](#10-non-functional-requirements)
+11. [Known gaps](#11-known-gaps)
+12. [Roadmap](#12-roadmap)
+13. [Glossary](#13-glossary)
 
 ---
 
@@ -40,7 +41,7 @@ The product is built for one mess at a time — a single admin (or small admin t
 - Give every member real-time visibility into the meal rate and their own balance — no waiting for month-end.
 - Let members submit money-affecting entries (deposits, bazar, bill payments) without an admin needing to be present, while keeping an admin as the final approver before anything counts.
 - Make every change auditable: an append-only activity log any member can read.
-- Let members self-serve corrections (a missed meal, a trip home) instead of pinging the admin directly.
+- Let members self-serve corrections (a missed meal, a trip home) instead of pinging the admin directly — while keeping an admin in the loop before a correction to an already-logged entry becomes final.
 
 ### Non-goals — current version
 
@@ -56,11 +57,11 @@ Every signed-in account is linked **1:1 to a member record** (`member_links`) �
 | Role | Who they are |
 |---|---|
 | `super_admin` | The mess owner account. Everything an admin can do, plus granting or revoking `admin` and handing off `super_admin` itself. |
-| `admin` | Manages members, reviews and approves deposits/bazar/bill payments, closes and reopens the month, and maintains the signup allowlist. |
+| `admin` | Manages members, reviews and approves deposits/bazar/bill payments/corrections, closes and reopens the month, and maintains the signup allowlist. |
 | `bazar_contributor` | A trusted member allowed to submit bazar (grocery) purchases for reimbursement. Granted per-member by an admin. |
 | `member` (default) | Logs their own meals, submits their own deposits, requests corrections, and reads reports and the transparency log. |
 
-**Portal-gated sign-in.** The sign-in screen makes users pick an Admin or Member portal before authenticating. Signing into the wrong portal for the account's actual role signs them back out with an explanation. This is a UX guardrail to keep roles visibly separate, not the security boundary — that enforcement lives in the database's row-level security functions (`has_role`, `is_admin_or_super`).
+**Single sign-in flow.** There is one sign-in form — no Admin/Member portal picker. After authenticating, the app reads the account's real roles from `user_roles` and adjusts what's visible accordingly; there's no separate "wrong portal" state to hit. Enforcement lives entirely in the database's row-level security functions (`has_role`, `is_admin_or_super`) — the UI never gates anything RLS wouldn't already gate.
 
 ## 4. Core business logic
 
@@ -100,17 +101,19 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 
 ### 5.1 Authentication & access — `/auth`
 
-- Email + password via Supabase Auth.
+- Email + password via Supabase Auth, single sign-in/sign-up form (no portal picker — see §3).
 - Signup is **allowlist-gated**: an admin adds an email under Settings before that person can register. The one exception is the very first account ever created, which auto-bootstraps as admin.
 - Signup runs through a dedicated Edge Function (`signup-allowlisted`) that creates the user pre-confirmed with the service-role key — this deliberately bypasses Supabase Auth's confirmation-email flow so approved members are never blocked by its rate limit.
 
 ### 5.2 Dashboard — `/`
 
-- Live meal-rate hero figure for the current month.
+- Greeting/status hero banner: time-of-day greeting with the signed-in user's display name, a headline that reads "You're all caught up" or switches to "N items need your review" for admins with open bazar/correction queues, and the day's context line (day-of-month, month-to-date bazar, meals logged today).
+- Hero banner also carries the primary actions — a "Review approvals" button (admin-only, deep-links into the pending bazar queue) and "View analytics" (links to Report) — alongside a live meal-rate panel showing the current rate, a Live rate/Final rate badge, and four mini-stats (meals, bazar MTD, net due, day of month).
+- For admins: alert cards above the hero for pending bazar review and open correction requests, linking straight into the filtered queue.
+- Quick-action row: Add meal / Add deposit (admin), Submit bazar (contributor), Activity link.
 - KPI tiles: total bazar, total deposits, total meals, net advance/due.
-- For admins: alert cards for pending bazar review and open correction requests, linking straight into the filtered queue.
-- Per-member settlement list and the last 8 transparency-log entries.
-- Four placeholder KPI tiles (Bills unpaid, Rent collected, Rent due, Active agreements) marked "Coming soon" — see §10.
+- Per-member settlement list and the last 6 transparency-log entries.
+- Four placeholder KPI tiles (Bills unpaid, Rent collected, Rent due, Active agreements) marked "Coming soon" — see §11.
 
 ### 5.3 Members — `/members`
 
@@ -121,8 +124,10 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 
 ### 5.4 Meals — `/meals`
 
-- Calendar grid for the month; tap a day to set that member's meal count in 0.5 increments, with 0–3 quick-set buttons.
-- Members edit only their own linked meals; admins can select and edit any member.
+- Calendar grid for the month; tap a day to set that member's meal count in 0.5 increments, with 0–3 quick-set buttons. Members edit only their own linked meals; admins can select and edit any member.
+- **First-time entry is instant.** Logging a day that has no entry yet writes directly — no approval needed, so routine daily logging never touches the admin queue.
+- **Editing or clearing an already-logged day requires admin approval** (members only — admins always write directly). The change is submitted as a `correction_requests` row (`entity_type: 'meals'`) instead of updating `meals` directly; this is enforced by RLS, not just the UI — the "Member update/delete own meals" policies were removed, so a direct write attempt on an existing row is rejected at the database level regardless of what the client sends. The calendar shows a "pending" badge with the proposed count on days with an open request, and blocks opening the editor again for that day until it's resolved.
+- Members can also mark themselves away for a date range (auto-approved if fully in the future and the affected months are open; otherwise held for admin review).
 - Fully locked once the month is closed.
 
 ### 5.5 Deposits — `/deposits`
@@ -147,7 +152,7 @@ Rent and utilities, tracked separately from the meal ledger.
 
 ### 5.8 Corrections — `/corrections`
 
-A member-initiated request queue for anything they can't fix themselves.
+A member-initiated request queue for anything they can't fix themselves — including, now, editing an already-logged meal day (see §5.4), which lands here under the same review flow as explicit requests.
 
 1. **Member requests** — update a past day's meal count, mark themselves away / back (inactive / active), or describe something else in free text — plus a required reason.
 2. **Request lands as open** — visible to the requester and every admin, with the requested change summarized.
@@ -162,7 +167,7 @@ A member-initiated request queue for anything they can't fix themselves.
 
 - Monthly summary: expense, deposits, meals, meal rate, plus rent/utility collected vs. unpaid.
 - Full member-wise breakdown (meals, cost, deposits, rent due, utility due, balance) with a totals row.
-- Browser print button only — no PDF export (see §10).
+- Browser print button only — no PDF export (see §11).
 
 ### 5.11 Settings — `/settings`
 
@@ -172,7 +177,7 @@ A member-initiated request queue for anything they can't fix themselves.
 
 ## 6. Data model
 
-Eleven+ tables in the `public` schema, backing the features above.
+Thirteen tables in the `public` schema, backing the features above.
 
 | Table | Purpose | Key fields |
 |---|---|---|
@@ -184,24 +189,27 @@ Eleven+ tables in the `public` schema, backing the features above.
 | `expenses` | Bazar / shared spend | `title, amount, category, status, submitted_by` |
 | `bills_v2` | A rent or utility bill | `bill_type, title, total_amount, due_date, due_month` |
 | `bill_items` | One member's share of a bill | `bill_id, member_id, amount, status, paid_on` |
-| `correction_requests` | Member fix requests | `entity_type, requested_value, status, reason` |
+| `correction_requests` | Member fix requests, incl. in-place meal edits | `entity_type, requested_value, status, reason` |
+| `member_away_periods` | Member-declared away date ranges | `member_id, start_date, end_date, status` |
 | `months` | Per-month close snapshot | `month, is_closed, final_meal_rate, total_expense` |
 | `signup_allowlist` | Emails permitted to register | `email, note, created_by` |
 | `activity_logs` | Append-only audit trail | `action, entity_type, actor_email, diff, month` |
 | `profiles` | Display name per user | `user_id, display_name` |
 
-Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, and `apply_correction` for the corrections auto-apply path. Twenty-one versioned SQL migrations under `supabase/migrations` define this schema today.
+Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, and `apply_correction` for the corrections auto-apply path. Twenty-five versioned SQL migrations under `supabase/migrations` define this schema today.
 
 ## 7. Approval workflows
 
-Every entry that moves money — or changes what a member is credited for — follows the same shape: a non-admin submission starts *pending* and only counts once an admin acts on it. Admin-entered records are recorded directly.
+Every entry that moves money — or changes what a member is credited for once it's already on the record — follows the same shape: a non-admin submission starts *pending* and only counts once an admin acts on it. Admin-entered records, and a member's *first-time* entry of a not-yet-logged day, are recorded directly.
 
 | Entity | Who can submit | States | Once approved |
 |---|---|---|---|
 | Deposit | Member (own), Admin (any) | `pending → approved / rejected` | Counts toward that member's balance |
 | Bazar / expense | Contributor, Admin | `pending → approved / rejected` | Counts toward the month's meal rate |
 | Bill payment | Member (own share) | `unpaid → pending_review → paid / unpaid` | Share marked settled with a paid date |
-| Correction request | Member (own record) | `open → approved / rejected` | Meal count or active status updated, if auto-applied |
+| Meal entry (new day) | Member (own), Admin (any) | Written directly — no approval step | Counts immediately toward meals/rate |
+| Meal edit (existing day) | Member (own) | `open → approved / rejected` (via `correction_requests`) | Meal count updated via `apply_correction` |
+| Correction request (other) | Member (own record) | `open → approved / rejected` | Meal count or active status updated, if auto-applied |
 
 ## 8. Technical architecture
 
@@ -211,32 +219,38 @@ Every entry that moves money — or changes what a member is credited for — fo
 
 **Hosting & config.** Deployed on Vercel. Supabase project id, URL, and anon key are supplied via `VITE_`-prefixed env vars; the project id is also pinned in `supabase/config.toml` for the CLI migration workflow.
 
-**Schema management.** Twenty-one versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
+**Schema management.** Twenty-five versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
 
-## 9. Non-functional requirements
+## 9. Branding
+
+- **Primary color:** `#F39C13` (orange). **Base/dark surface color:** `#221502` (near-black warm brown) — the app is dark-mode-only, with the full palette (background, card, sidebar, borders) derived from this base hue rather than the earlier blue-slate theme.
+- **Logo/icon:** the "Mess pilot" mark (`src/assets/icons/`) — an orange-badged glyph used in the sidebar, mobile header, sign-in screen, and browser favicon. A dark-badged variant exists in the same folder for use on light/orange backgrounds.
+- Form fields (`Input`, `Textarea`, `Select`, `InputOTP`) and buttons use a 4px corner radius with a thin (1px) focus ring, deliberately tighter/thinner than shadcn's defaults.
+
+## 10. Non-functional requirements
 
 - **Mobile-first input.** Large tap targets, 1–2 taps to log a meal — the product's own stated usability bar.
 - **Currency.** All amounts in Taka (৳), formatted to a maximum of 2 decimals through one shared helper.
-- **Default-safe writes.** Non-admin submissions that touch money default to pending — nothing a member submits silently becomes truth without an admin action.
+- **Default-safe writes.** Non-admin submissions that touch money — or that change an already-logged meal day — default to pending; nothing a member submits silently becomes truth without an admin action, except a brand-new (not-yet-logged) meal entry.
 - **Auditability.** State-changing actions are expected to land in `activity_logs` so the Transparency page stays a complete record, with no edit/delete surface exposed for past entries.
 
-## 10. Known gaps
+## 11. Known gaps
 
 Observed directly in the current codebase — not aspirational, these are real as of this document's date.
 
 - **Duplicate expense entry point.** An `/expenses` route and page exist alongside `/bazar`, covering a slice of the same "log a shared expense" job but with no approval workflow and no entry in the navigation sidebar. Worth retiring or folding into Bazar.
 - **Dashboard placeholders.** Four KPI tiles — Bills unpaid, Rent collected, Rent due, Active agreements — are explicit "Coming soon" placeholders, even though the Bills data they'd need already exists in `bills_v2` / `bill_items`. The dashboard just isn't wired to it yet.
-- **Stale README.** The repository's README previously described a Next.js + Firebase stack while the shipped app is Vite + React + Supabase; this has since been corrected alongside the MessPilot rebrand.
+- **No way to withdraw a correction request.** `correction_requests` has no delete policy, so once a member submits one (including an in-place meal edit — see §5.4), only an admin can resolve it; the member can't cancel a request they submitted by mistake.
 - **No PDF export.** The Report page — the natural "send this to the group" artifact — offers only `window.print()`, not a generated PDF.
 - **No notification channel.** Nothing pushes a pending approval, a bill due date, or a correction response to a member outside the app itself — they have to go check.
 
-## 11. Roadmap
+## 12. Roadmap
 
-1. **Near-term** — Wire the four dashboard placeholders to real Bills data; retire or merge `/expenses` into `/bazar`.
+1. **Near-term** — Wire the four dashboard placeholders to real Bills data; retire or merge `/expenses` into `/bazar`; let a member withdraw their own open correction request.
 2. **V1 polish** — Notifications for pending reviews and bill due dates; sharper, more detailed reports.
 3. **V2** — WhatsApp/SMS alerts, PDF export, multi-mess (multi-tenant) support, advanced analytics.
 
-## 12. Glossary
+## 13. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -247,4 +261,4 @@ Observed directly in the current codebase — not aspirational, these are real a
 
 ---
 
-*MessPilot PRD · v1.0 · Compiled from the shipped codebase, 10 Aug 2026*
+*MessPilot PRD · v1.1 · Compiled from the shipped codebase, 11 Aug 2026*
