@@ -1,8 +1,8 @@
-# iMess
+# MessPilot
 
 > Smart mess management system to track meals, deposits, bazar expenses, and utility bills with transparent member-wise monthly reports.
 
-iMess helps shared messes and hostels keep transparent records of meals, deposits, market (bazar) expenses, and utility/rent bills. Members can submit their own meal counts and deposits, while admins approve entries and produce monthly reports.
+MessPilot helps shared messes and hostels keep transparent records of meals, deposits, market (bazar) expenses, and utility/rent bills. Members can submit their own meal counts and deposits, while admins approve entries and produce monthly reports.
 
 ## Pages
 

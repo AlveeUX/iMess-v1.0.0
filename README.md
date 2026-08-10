@@ -1,6 +1,6 @@
-# 🏠 iMess — Smart Mess Management System
+# 🏠 MessPilot — Smart Mess Management System
 
-iMess is a **mobile-first web application** built to simplify mess (shared housing) management.
+MessPilot is a **mobile-first web application** built to simplify mess (shared housing) management.
 
 It replaces manual spreadsheets and WhatsApp-based calculations with a **clear, automated system** for tracking meals, deposits, expenses, and monthly balances.
 
@@ -15,7 +15,7 @@ Managing a bachelor mess usually leads to:
 * ❌ End-of-month calculation stress
 * ❌ Lack of transparency
 
-### ✅ iMess fixes this by:
+### ✅ MessPilot fixes this by:
 
 * Automating meal rate calculation
 * Tracking all financial activity in one place
@@ -30,7 +30,7 @@ Managing a bachelor mess usually leads to:
 
 * Add, edit, and manage members
 * Active / inactive control
-* Role-based system (Admin / Member)
+* Role-based system (Super Admin / Admin / Bazar Contributor / Member)
 
 ---
 
@@ -45,7 +45,7 @@ Managing a bachelor mess usually leads to:
 ### 💰 Deposit Tracking
 
 * Record deposits per member
-* Track total contributions
+* Submit-and-approve workflow for member-submitted deposits
 * Real-time financial visibility
 
 ---
@@ -54,20 +54,28 @@ Managing a bachelor mess usually leads to:
 
 * Track shared expenses
 * Categorize spending
-* Maintain total expense overview
+* Submit-and-approve workflow before spend counts toward the meal rate
+
+---
+
+### 🧾 Rent & Utility Bills
+
+* Per-member rent bills
+* Utility bills auto-split equally across active members
+* Member "mark as paid" → admin review queue
 
 ---
 
 ### ⚡ Live Meal Rate Calculation
 
 ```math
-Meal\ Rate = \frac{Total\ Expense}{Total\ Meals}
+Meal\ Rate = \frac{Total\ Approved\ Expense}{Total\ Meals}
 ```
 
 Updates instantly when:
 
 * meals change
-* expenses change
+* approved expenses change
 
 ---
 
@@ -79,6 +87,20 @@ Balance = Deposits - (Meals \times Meal\ Rate)
 
 * 🔴 Negative → Due
 * 🟢 Positive → Advance
+
+---
+
+### 📝 Correction Requests
+
+* Members can request a meal-count fix or an away/back status change
+* Admin can auto-apply, approve manually, or reject — every outcome logged
+
+---
+
+### 🔍 Transparency Log
+
+* Append-only audit trail of every change
+* Filterable by entity, action, and free-text search
 
 ---
 
@@ -108,14 +130,14 @@ Balance = Deposits - (Meals \times Meal\ Rate)
 
 ### Frontend
 
-* Next.js
-* TypeScript
-* Tailwind CSS
+* Vite
+* React 18 + TypeScript
+* Tailwind CSS + shadcn/ui (Radix primitives)
+* TanStack Query, React Router, React Hook Form + Zod
 
 ### Backend
 
-* Firebase (Auth + Firestore + Functions)
-  *(or Supabase depending on configuration)*
+* Supabase (Postgres + Auth + Edge Functions)
 
 ### Deployment
 
@@ -125,7 +147,7 @@ Balance = Deposits - (Meals \times Meal\ Rate)
 
 ## 🧠 System Philosophy
 
-iMess is built with:
+MessPilot is built with:
 
 * **Simplicity over complexity**
 * **Speed over feature overload**
@@ -148,19 +170,18 @@ iMess is built with:
 ## 🗂️ Project Structure (Conceptual)
 
 ```
-/app
-  /dashboard
-  /members
-  /meals
-  /deposits
-  /expenses
-  /report
-  /settings
+/src
+  /pages
+    Dashboard, Members, Meals, Deposits, Bazar,
+    Bills, Report, Transparency, Corrections, Settings, Auth
+  /components
+  /hooks
+  /integrations/supabase
+  /lib
 
-/components
-/lib
-/firebase (or supabase)
-/functions
+/supabase
+  /migrations
+  /functions
 ```
 
 ---
@@ -170,7 +191,7 @@ iMess is built with:
 ### Meal Rate
 
 ```math
-mealRate = \frac{totalExpense}{totalMeals}
+mealRate = \frac{totalApprovedExpense}{totalMeals}
 ```
 
 ### Member Balance
@@ -179,6 +200,8 @@ mealRate = \frac{totalExpense}{totalMeals}
 balance = deposits - (mealCount \times mealRate)
 ```
 
+See `docs/MessPilot PRD.md` for the full product requirements, data model, and workflow specs.
+
 ---
 
 ## ⚙️ Getting Started
@@ -186,8 +209,8 @@ balance = deposits - (mealCount \times mealRate)
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/iMess.git
-cd iMess
+git clone https://github.com/AlveeUX/iMess-v1.0.0.git
+cd iMess-v1.0.0
 ```
 
 ---
@@ -202,18 +225,13 @@ npm install
 
 ### 3. Setup Environment Variables
 
-Create `.env.local`:
+Create `.env`:
 
 ```env
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+VITE_SUPABASE_PROJECT_ID=
 ```
-
-*(or Supabase config if used)*
 
 ---
 
@@ -233,26 +251,17 @@ Deploy easily with:
 
 ---
 
-## 🧪 Demo Data
-
-Includes:
-
-* Sample members
-* Meals
-* Deposits
-* Expenses
-
-So you can test immediately.
-
----
-
 ## 🚧 Roadmap
+
+### Near-term
+
+* Wire dashboard placeholder tiles to real Bills data
+* Retire/merge the legacy `/expenses` route into `/bazar`
 
 ### V1
 
 * Notifications
 * Improved reports
-* UI polish
 
 ### V2
 
@@ -298,6 +307,6 @@ TreeTech Studios
 > If daily usage is easy → people will use it
 > If people use it → the system becomes valuable
 
-iMess is designed to make **daily usage effortless**.
+MessPilot is designed to make **daily usage effortless**.
 
 © 2026 TreeTech Studios. All rights reserved.

@@ -100,7 +100,7 @@ export const Layout = () => {
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold">iMES</span>
+            <span className="font-bold">MessPilot</span>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setOpen(!open)}>
             {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -127,7 +127,7 @@ export const Layout = () => {
               <UtensilsCrossed className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <div className="font-bold tracking-tight">iMES</div>
+              <div className="font-bold tracking-tight">MessPilot</div>
               <div className="text-xs text-muted-foreground">{roleLabel}</div>
             </div>
           </div>

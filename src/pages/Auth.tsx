@@ -108,7 +108,7 @@ const Auth = () => {
           <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4 shadow-glow">
             <UtensilsCrossed className="w-7 h-7 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold">Mess Manager</h1>
+          <h1 className="text-2xl font-bold">MessPilot</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "signin" ? `Sign in as ${loginType}` : "Create your account"}
           </p>
