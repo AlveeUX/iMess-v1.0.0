@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { z } from "zod";
 import { useMonthData } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,10 +27,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil, Info } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 
 const schema = z.object({
   title: z.string().trim().min(1, "Title required").max(80),
@@ -56,35 +56,62 @@ const statusBadge = (status: string) => {
 
 const Bazar = () => {
   const { data, isLoading } = useMonthData();
-  const { isAdmin, isContributor, user } = useAuth();
+  const { isAdmin, isContributor, user, memberId } = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as "pending" | "approved" | "rejected" | "all") ?? "all";
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState("");
-  const [form, setForm] = useState({
+  const blankForm = () => ({
     title: "",
     amount: "",
     category: "bazar",
     date: format(new Date(), "yyyy-MM-dd"),
   });
+  const [form, setForm] = useState(blankForm());
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(blankForm());
+    setOpen(true);
+  };
+
+  const openEdit = (e: any) => {
+    setEditingId(e.id);
+    setForm({
+      title: e.title,
+      amount: String(e.amount),
+      category: e.category,
+      date: e.date,
+    });
+    setOpen(true);
+  };
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     const parsed = schema.safeParse({ ...form, amount: parseFloat(form.amount) });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
-    const { error } = await supabase.from("expenses").insert({
+    const payload = {
       title: form.title.trim(),
       amount: parseFloat(form.amount),
       category: form.category,
       date: form.date,
-    });
-    if (error) return toast.error(error.message);
-    toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    };
+    if (editingId) {
+      const { error } = await supabase.from("expenses").update(payload).eq("id", editingId);
+      if (error) return toast.error(error.message);
+      toast.success("Bazar updated");
+    } else {
+      const { error } = await supabase.from("expenses").insert(payload);
+      if (error) return toast.error(error.message);
+      toast.success(isAdmin ? "Bazar added" : "Bazar submitted for approval");
+    }
     qc.invalidateQueries({ queryKey: ["month-data"] });
     setOpen(false);
-    setForm({ title: "", amount: "", category: "bazar", date: format(new Date(), "yyyy-MM-dd") });
+    setEditingId(null);
+    setForm(blankForm());
   };
 
   const review = async (status: "approved" | "rejected") => {
@@ -112,18 +139,40 @@ const Bazar = () => {
     qc.invalidateQueries({ queryKey: ["month-data"] });
   };
 
+  // Profile lookup for submitter names (community transparency)
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("user_id, display_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const nameOf = useMemo(() => {
+    const m = new Map<string, string>();
+    (profiles ?? []).forEach((p: any) => m.set(p.user_id, p.display_name || "Member"));
+    return (uid?: string | null) => (uid ? m.get(uid) ?? "Member" : "—");
+  }, [profiles]);
+
   if (isLoading || !data) return <div className="text-muted-foreground">Loading…</div>;
   const locked = data.isClosed;
 
-  // Filter: contributors see only their own; admin sees all
-  let visible = data.expenses;
-  if (!isAdmin) visible = visible.filter((e) => e.submitted_by === user?.id);
+  // Visibility: approved items are public to all signed-in users.
+  // Pending / rejected items only show to the submitter (or admin).
+  let visible = data.expenses.filter(
+    (e) => e.status === "approved" || isAdmin || e.submitted_by === user?.id
+  );
   if (tab !== "all") visible = visible.filter((e) => e.status === tab);
 
+  const ownPendingOrRejected = (status: string) =>
+    data.expenses.filter(
+      (e) => e.status === status && (isAdmin || e.submitted_by === user?.id)
+    ).length;
   const counts = {
-    pending: data.expenses.filter((e) => e.status === "pending" && (isAdmin || e.submitted_by === user?.id)).length,
-    approved: data.expenses.filter((e) => e.status === "approved" && (isAdmin || e.submitted_by === user?.id)).length,
-    rejected: data.expenses.filter((e) => e.status === "rejected" && (isAdmin || e.submitted_by === user?.id)).length,
+    pending: ownPendingOrRejected("pending"),
+    approved: data.expenses.filter((e) => e.status === "approved").length,
+    rejected: ownPendingOrRejected("rejected"),
   };
 
   return (
@@ -140,14 +189,16 @@ const Bazar = () => {
             </p>
           </div>
         </div>
-        {isContributor && !locked && (
-          <Dialog open={open} onOpenChange={setOpen}>
+        {!locked && (
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(blankForm()); } }}>
             <DialogTrigger asChild>
-              <Button size="lg"><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
+              <Button size="lg" onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{isAdmin ? "New bazar" : "Submit bazar for approval"}</DialogTitle>
+                <DialogTitle>
+                  {editingId ? "Edit bazar" : isAdmin ? "New bazar" : "Submit bazar for approval"}
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={submit} className="space-y-4">
                 <div className="space-y-2">
@@ -176,13 +227,23 @@ const Bazar = () => {
                   <Label>Date</Label>
                   <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 </div>
-                {!isAdmin && (
-                  <p className="text-xs text-muted-foreground">
-                    Your submission will be marked <strong>pending</strong> until admin approves it.
-                  </p>
+                {!editingId && (
+                  <div className={`flex gap-2 rounded-md border p-3 text-xs ${memberId ? "border-primary/30 bg-primary/5 text-foreground" : "border-warning/40 bg-warning/5 text-foreground"}`}>
+                    <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                    {memberId ? (
+                      <span>
+                        This will also be recorded as a <strong>৳{form.amount || "0"} deposit</strong> under your profile (method: <em>bazar</em>). No need to add it twice.
+                        {!isAdmin && <> Status stays <strong>pending</strong> until an admin approves.</>}
+                      </span>
+                    ) : (
+                      <span>
+                        Your account isn't linked to a member yet, so this bazar won't auto-create a deposit. Ask an admin to link your account in Settings.
+                      </span>
+                    )}
+                  </div>
                 )}
                 <Button type="submit" className="w-full" size="lg">
-                  {isAdmin ? "Save bazar" : "Submit for approval"}
+                  {editingId ? "Save changes" : isAdmin ? "Save bazar" : "Submit for approval"}
                 </Button>
               </form>
             </DialogContent>
@@ -218,7 +279,19 @@ const Bazar = () => {
                     {statusBadge(e.status)}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {format(new Date(e.date), "MMM d")} · {e.category}
+                    {format(new Date(e.date), "MMM d")} · {e.category} · by{" "}
+                    {e.submitted_by === user?.id ? (
+                      <span className="text-foreground/80 font-medium">You</span>
+                    ) : e.submitted_by ? (
+                      <Link
+                        to={`/bazar/member/${e.submitted_by}`}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        {nameOf(e.submitted_by)}
+                      </Link>
+                    ) : (
+                      <span className="text-foreground/80 font-medium">—</span>
+                    )}
                     {e.review_note && ` · "${e.review_note}"`}
                   </div>
                 </div>
@@ -226,7 +299,12 @@ const Bazar = () => {
                 {isAdmin && e.status === "pending" && !locked && (
                   <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
                 )}
-                {isAdmin && !locked && (
+                {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
+                  <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                )}
+                {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (
                   <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>

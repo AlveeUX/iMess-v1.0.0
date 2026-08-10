@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Check, Plus, Trash2, Receipt, Home, Zap, ClipboardCheck, X, Clock } from "lucide-react";
+import { Check, Plus, Trash2, Receipt, Home, Zap, ClipboardCheck, X, Clock, Pencil } from "lucide-react";
 
 type Member = {
   id: string;
@@ -94,8 +95,63 @@ const StatusBadge = ({ s }: { s: BillItem["status"] }) => {
   return <Badge variant="secondary">Unpaid</Badge>;
 };
 
+const EditableAmount = ({
+  item,
+  editingId,
+  editValue,
+  setEditValue,
+  onStart,
+  onCancel,
+  onSave,
+}: {
+  item: BillItem;
+  editingId: string | null;
+  editValue: string;
+  setEditValue: (v: string) => void;
+  onStart: (it: BillItem) => void;
+  onCancel: () => void;
+  onSave: (it: BillItem) => void;
+}) => {
+  if (editingId === item.id) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <Input
+          autoFocus
+          type="number"
+          step="0.01"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave(item);
+            if (e.key === "Escape") onCancel();
+          }}
+          className="h-8 w-24 text-right font-mono"
+        />
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onSave(item)} title="Save">
+          <Check className="w-4 h-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancel} title="Cancel">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onStart(item)}
+      className="inline-flex items-center gap-1 font-mono hover:text-primary group"
+      title="Edit amount"
+    >
+      {fmt(item.amount)}
+      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  );
+};
+
 const Bills = () => {
   const { isAdmin, memberId } = useAuth();
+  const queryClient = useQueryClient();
   const [members, setMembers] = useState<Member[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [items, setItems] = useState<BillItem[]>([]);
@@ -105,6 +161,14 @@ const Bills = () => {
   const [utilOpen, setUtilOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailBill, setDetailBill] = useState<Bill | null>(null);
+
+  // Amount editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [paidConfirm, setPaidConfirm] = useState<{ item: BillItem; amount: number } | null>(null);
+  const [rentDefaultPrompt, setRentDefaultPrompt] = useState<
+    { memberId: string; memberName: string; amount: number } | null
+  >(null);
 
   // rent form
   const [rMember, setRMember] = useState("");
@@ -132,6 +196,16 @@ const Bills = () => {
     if (b.data) setBills(b.data as Bill[]);
     if (i.data) setItems(i.data as BillItem[]);
     setLoading(false);
+  };
+
+  // Reload local Bills state + invalidate downstream React Query caches
+  // (Report, Dashboard, Transparency, Members) so balances, dues, and rates refresh.
+  const refresh = async () => {
+    await load();
+    queryClient.invalidateQueries({ queryKey: ["month-data"] });
+    queryClient.invalidateQueries({ queryKey: ["members"] });
+    queryClient.invalidateQueries({ queryKey: ["month"] });
+    queryClient.invalidateQueries({ queryKey: ["corrections-open-count"] });
   };
 
   useEffect(() => {
@@ -218,7 +292,7 @@ const Bills = () => {
     setRAmount("");
     setRTitle("Monthly Rent");
     setRNotes("");
-    load();
+    refresh();
   };
 
   // Auto-fill rent amount when member changes
@@ -269,7 +343,7 @@ const Bills = () => {
     setUTitle("");
     setUAmount("");
     setUNotes("");
-    load();
+    refresh();
   };
 
   const deleteBill = async (id: string) => {
@@ -277,7 +351,7 @@ const Bills = () => {
     if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
     toast({ title: "Bill deleted" });
     setDeleteId(null);
-    load();
+    refresh();
   };
 
   // ---- Admin: review payment ----
@@ -293,7 +367,66 @@ const Bills = () => {
     }
     const { error } = await supabase.from("bill_items").update(patch).eq("id", item.id);
     if (error) return toast({ title: "Failed", description: error.message, variant: "destructive" });
-    load();
+    refresh();
+  };
+
+  // ---- Admin: edit bill item amount ----
+  const startEdit = (it: BillItem) => {
+    setEditingId(it.id);
+    setEditValue(String(it.amount));
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+  const trySaveEdit = (it: BillItem) => {
+    const n = Number(editValue);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast({ title: "Invalid amount", description: "Enter a number greater than 0", variant: "destructive" });
+      return;
+    }
+    if (n === Number(it.amount)) {
+      cancelEdit();
+      return;
+    }
+    if (it.status === "paid") {
+      setPaidConfirm({ item: it, amount: n });
+      return;
+    }
+    void commitEdit(it, n);
+  };
+  const commitEdit = async (it: BillItem, n: number) => {
+    const { error } = await supabase.from("bill_items").update({ amount: n }).eq("id", it.id);
+    if (error) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Amount updated" });
+    cancelEdit();
+    setPaidConfirm(null);
+    // For rent bills, offer to update the member default
+    const bill = bills.find((b) => b.id === it.bill_id);
+    if (bill?.bill_type === "rent") {
+      const m = memberMap[it.member_id];
+      if (m && Number(m.rent_amount) !== n) {
+        setRentDefaultPrompt({ memberId: it.member_id, memberName: m.name, amount: n });
+      }
+    }
+    refresh();
+  };
+  const updateMemberDefaultRent = async () => {
+    if (!rentDefaultPrompt) return;
+    const { error } = await supabase
+      .from("members")
+      .update({ rent_amount: rentDefaultPrompt.amount })
+      .eq("id", rentDefaultPrompt.memberId);
+    if (error) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Default rent updated" });
+    setRentDefaultPrompt(null);
+    refresh();
   };
 
   // ---- Member: request review or cancel ----
@@ -304,7 +437,7 @@ const Bills = () => {
     toast({
       title: next === "pending_review" ? "Marked as paid — awaiting admin review" : "Request canceled",
     });
-    load();
+    refresh();
   };
 
   const memberLabel = (id: string) => {
@@ -399,6 +532,12 @@ const Bills = () => {
           onSetStatus={adminSetStatus}
           items={items}
           bills={bills}
+          editingId={editingId}
+          editValue={editValue}
+          setEditValue={setEditValue}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={trySaveEdit}
         />
       ) : (
         <MemberView
@@ -547,7 +686,21 @@ const Bills = () => {
                   {(itemsByBill[detailBill.id] ?? []).map((it) => (
                     <TableRow key={it.id}>
                       <TableCell>{memberLabel(it.member_id)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(it.amount)}</TableCell>
+                      <TableCell className="text-right">
+                        {isAdmin ? (
+                          <EditableAmount
+                            item={it}
+                            editingId={editingId}
+                            editValue={editValue}
+                            setEditValue={setEditValue}
+                            onStart={startEdit}
+                            onCancel={cancelEdit}
+                            onSave={trySaveEdit}
+                          />
+                        ) : (
+                          <span className="font-mono">{fmt(it.amount)}</span>
+                        )}
+                      </TableCell>
                       <TableCell><StatusBadge s={it.status} /></TableCell>
                       <TableCell className="text-muted-foreground">{it.paid_on ?? "—"}</TableCell>
                       {isAdmin && (
@@ -571,6 +724,44 @@ const Bills = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirm edit on Paid row */}
+      <AlertDialog open={!!paidConfirm} onOpenChange={(o) => !o && setPaidConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit a paid bill?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This bill is already marked Paid. Updating the amount will overwrite the paid value.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => paidConfirm && commitEdit(paidConfirm.item, paidConfirm.amount)}
+            >
+              Update anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Propagate to member default rent */}
+      <AlertDialog open={!!rentDefaultPrompt} onOpenChange={(o) => !o && setRentDefaultPrompt(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update default rent?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Also set {rentDefaultPrompt?.memberName}'s default monthly rent to{" "}
+              {rentDefaultPrompt ? fmt(rentDefaultPrompt.amount) : ""}? Future rent bills will use
+              this value. The current bill has already been updated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, just this bill</AlertDialogCancel>
+            <AlertDialogAction onClick={updateMemberDefaultRent}>Yes, update default</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -588,6 +779,12 @@ const AdminView = ({
   onSetStatus,
   items,
   bills,
+  editingId,
+  editValue,
+  setEditValue,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
 }: any) => {
   return (
     <Tabs defaultValue="rent" className="space-y-4">
@@ -632,7 +829,17 @@ const AdminView = ({
                         <TableCell className="text-muted-foreground">
                           {m?.seat_name || (m?.room ? `Room ${m.room}` : "—")}
                         </TableCell>
-                        <TableCell className="text-right font-mono">{fmt(it.amount)}</TableCell>
+                        <TableCell className="text-right">
+                          <EditableAmount
+                            item={it}
+                            editingId={editingId}
+                            editValue={editValue}
+                            setEditValue={setEditValue}
+                            onStart={onStartEdit}
+                            onCancel={onCancelEdit}
+                            onSave={onSaveEdit}
+                          />
+                        </TableCell>
                         <TableCell>{b.due_month?.slice(0, 7) ?? b.due_date}</TableCell>
                         <TableCell><StatusBadge s={it.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{it.paid_on ?? "—"}</TableCell>

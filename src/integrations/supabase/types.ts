@@ -265,6 +265,7 @@ export type Database = {
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          source_expense_id: string | null
           status: string
           submitted_at: string
           submitted_by: string | null
@@ -280,6 +281,7 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_expense_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
@@ -295,6 +297,7 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_expense_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by?: string | null
@@ -305,6 +308,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposits_source_expense_id_fkey"
+            columns: ["source_expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
             referencedColumns: ["id"]
           },
         ]
@@ -379,6 +389,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_away_periods: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          member_id: string
+          note: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          member_id: string
+          note?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          member_id?: string
+          note?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_away_periods_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"

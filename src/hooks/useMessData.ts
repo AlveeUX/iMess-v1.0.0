@@ -35,7 +35,7 @@ export const useMonthData = (date: Date = new Date()) => {
   return useQuery({
     queryKey: ["month-data", r.monthKey],
     queryFn: async () => {
-      const [meals, deposits, expenses, members, monthRow, billsRes, billItemsRes] = await Promise.all([
+      const [meals, deposits, expenses, members, monthRow, billsRes, billItemsRes, awayRes] = await Promise.all([
         supabase.from("meals").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("deposits").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("expenses").select("*").gte("date", r.start).lte("date", r.end),
@@ -43,7 +43,14 @@ export const useMonthData = (date: Date = new Date()) => {
         supabase.from("months").select("*").eq("month", r.monthKey).maybeSingle(),
         supabase.from("bills_v2").select("*").gte("due_date", r.start).lte("due_date", r.end),
         supabase.from("bill_items").select("*"),
+        supabase
+          .from("member_away_periods")
+          .select("*")
+          .eq("status", "approved")
+          .lte("start_date", r.end)
+          .gte("end_date", r.start),
       ]);
+
 
       const allExpenses = expenses.data ?? [];
       const approvedExpenses = allExpenses.filter((e) => e.status === "approved");
@@ -114,6 +121,22 @@ export const useMonthData = (date: Date = new Date()) => {
         };
       });
 
+      // Away periods → awayByMemberDate map (member_id -> Set<yyyy-MM-dd>)
+      const awayRows = (awayRes.data ?? []) as any[];
+      const awayByMemberDate = new Map<string, Set<string>>();
+      for (const a of awayRows) {
+        const s = new Date(a.start_date < r.start ? r.start : a.start_date);
+        const e = new Date(a.end_date > r.end ? r.end : a.end_date);
+        const set = awayByMemberDate.get(a.member_id) ?? new Set<string>();
+        const d = new Date(s);
+        while (d <= e) {
+          set.add(d.toISOString().slice(0, 10));
+          d.setDate(d.getDate() + 1);
+        }
+        awayByMemberDate.set(a.member_id, set);
+      }
+
+
       return {
         range: r,
         meals: meals.data ?? [],
@@ -139,7 +162,11 @@ export const useMonthData = (date: Date = new Date()) => {
         rentUnpaid,
         utilCollected,
         utilUnpaid,
+        awayPeriods: awayRows,
+        awayByMemberDate,
       };
+
+
     },
   });
 };
