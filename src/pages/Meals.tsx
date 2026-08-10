@@ -14,7 +14,7 @@ import {
 import { useMonthData } from "@/hooks/useMessData";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 const Meals = () => {
   const [cursor, setCursor] = useState(new Date());
   const { data, isLoading } = useMonthData(cursor);
-  const { isAdmin, memberId: myMemberId } = useAuth();
+  const { isAdmin, memberId: myMemberId, user } = useAuth();
   const qc = useQueryClient();
 
   const activeMembers = useMemo(
@@ -96,6 +96,32 @@ const Meals = () => {
     return data.awayByMemberDate?.get(selectedMember) ?? new Set();
   }, [data, selectedMember]);
 
+  // Open correction requests for the selected member's meal edits — used to
+  // block duplicate submissions and show a "pending review" state on the calendar.
+  const { data: pendingMealCorrections } = useQuery({
+    queryKey: ["meal-corrections", selectedMember],
+    queryFn: async () => {
+      if (!selectedMember) return [];
+      const { data } = await supabase
+        .from("correction_requests")
+        .select("*")
+        .eq("entity_type", "meals")
+        .eq("status", "open")
+        .eq("member_id", selectedMember);
+      return data ?? [];
+    },
+    enabled: !!selectedMember,
+  });
+
+  const pendingByDate = useMemo(() => {
+    const m = new Map<string, { meal_count: number }>();
+    for (const r of pendingMealCorrections ?? []) {
+      const v = r.requested_value as any;
+      if (v?.date) m.set(v.date, { meal_count: Number(v.meal_count) });
+    }
+    return m;
+  }, [pendingMealCorrections]);
+
   const memberTotal = useMemo(() => {
     let t = 0;
     mealsByDate.forEach((v, d) => {
@@ -121,9 +147,30 @@ const Meals = () => {
       toast.info("This day is inside an away period — remove the period to edit.");
       return;
     }
+    if (pendingByDate.has(key) && !isAdmin) {
+      toast.info("You already have a pending request for this day — wait for admin review.");
+      return;
+    }
     setEditDay(key);
     setEditValue(String(mealsByDate.get(key) ?? 0));
     setHadEntry(hasEntryDate.has(key));
+  };
+
+  // Non-admins editing or clearing a day that's already saved can't write to meals
+  // directly (RLS only allows first-time entry) — the change goes to admin review instead.
+  const requestMealChange = async (mealCount: number) => {
+    if (!editDay || !selectedMember || !user) return;
+    const { error } = await supabase.from("correction_requests").insert({
+      requested_by: user.id,
+      member_id: selectedMember,
+      entity_type: "meals",
+      month: editDay.slice(0, 7) + "-01",
+      reason: "Meal count edit via calendar",
+      requested_value: { member_id: selectedMember, date: editDay, meal_count: mealCount },
+    });
+    if (error) throw error;
+    toast.success("Submitted for admin approval");
+    qc.invalidateQueries({ queryKey: ["meal-corrections", selectedMember] });
   };
 
   const saveDay = async () => {
@@ -131,15 +178,19 @@ const Meals = () => {
     const value = Math.max(0, parseFloat(editValue || "0"));
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("meals")
-        .upsert(
-          { member_id: selectedMember, date: editDay, meal_count: value },
-          { onConflict: "member_id,date" }
-        );
-      if (error) throw error;
-      toast.success("Saved");
-      qc.invalidateQueries({ queryKey: ["month-data"] });
+      if (!isAdmin && hadEntry) {
+        await requestMealChange(value);
+      } else {
+        const { error } = await supabase
+          .from("meals")
+          .upsert(
+            { member_id: selectedMember, date: editDay, meal_count: value },
+            { onConflict: "member_id,date" }
+          );
+        if (error) throw error;
+        toast.success("Saved");
+        qc.invalidateQueries({ queryKey: ["month-data"] });
+      }
       setEditDay(null);
     } catch (e: any) {
       toast.error(e.message);
@@ -152,14 +203,18 @@ const Meals = () => {
     if (!editDay || !selectedMember) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("meals")
-        .delete()
-        .eq("member_id", selectedMember)
-        .eq("date", editDay);
-      if (error) throw error;
-      toast.success("Cleared");
-      qc.invalidateQueries({ queryKey: ["month-data"] });
+      if (!isAdmin && hadEntry) {
+        await requestMealChange(0);
+      } else {
+        const { error } = await supabase
+          .from("meals")
+          .delete()
+          .eq("member_id", selectedMember)
+          .eq("date", editDay);
+        if (error) throw error;
+        toast.success("Cleared");
+        qc.invalidateQueries({ queryKey: ["month-data"] });
+      }
       setEditDay(null);
     } catch (e: any) {
       toast.error(e.message);
@@ -217,7 +272,8 @@ const Meals = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Meals</h1>
           <p className="text-muted-foreground mt-1">
-            Tap any day to update your meal count. Use 0 for "no meals", or set away periods for longer breaks.
+            Tap any day to log your meal count. Use 0 for "no meals", or set away periods for longer breaks.
+            {!isAdmin && " Changing a day you've already logged goes to admin for approval."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -330,8 +386,9 @@ const Meals = () => {
             const count = mealsByDate.get(key);
             const hasEntry = hasEntryDate.has(key);
             const isAway = awayDates.has(key);
+            const isPending = pendingByDate.has(key);
             const today = isToday(d);
-            const editable = inMonth && !locked && canEditSelected && (!isAway || isAdmin);
+            const editable = inMonth && !locked && canEditSelected && (!isAway || isAdmin) && (!isPending || isAdmin);
             return (
               <button
                 key={key}
@@ -361,6 +418,10 @@ const Meals = () => {
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       away
                     </span>
+                  ) : isPending && inMonth ? (
+                    <span className="text-[10px] uppercase tracking-wide text-warning">
+                      pending
+                    </span>
                   ) : today && inMonth ? (
                     <span className="text-[10px] uppercase tracking-wide text-primary">
                       today
@@ -370,6 +431,13 @@ const Meals = () => {
                 <div className="flex-1 flex items-center justify-center">
                   {isAway && inMonth ? (
                     <Plane className="w-4 h-4 text-muted-foreground/60" />
+                  ) : isPending && inMonth ? (
+                    <span
+                      className="inline-flex items-center justify-center min-w-10 h-10 px-2 rounded-full font-bold text-lg tabular-nums bg-warning/15 text-warning"
+                      title="Awaiting admin approval"
+                    >
+                      {pendingByDate.get(key)?.meal_count}
+                    </span>
                   ) : hasEntry && (count ?? 0) > 0 ? (
                     <span
                       className={cn(
@@ -478,11 +546,17 @@ const Meals = () => {
             <p className="text-xs text-muted-foreground text-center">
               Save 0 to log "no meals" for the day. Use Clear to remove the entry entirely.
             </p>
+            {!isAdmin && hadEntry && (
+              <p className="text-xs text-warning text-center">
+                This day is already logged — your change will be sent to admin for approval instead of saving instantly.
+              </p>
+            )}
           </div>
           <DialogFooter className="gap-2 flex-wrap">
             {hadEntry && (
               <Button variant="outline" onClick={clearDay} disabled={saving}>
-                <Trash2 className="w-4 h-4 mr-2" /> Clear day
+                <Trash2 className="w-4 h-4 mr-2" />
+                {!isAdmin ? "Request clear" : "Clear day"}
               </Button>
             )}
             <Button variant="ghost" onClick={() => setEditDay(null)} disabled={saving}>
@@ -490,7 +564,7 @@ const Meals = () => {
             </Button>
             <Button onClick={saveDay} disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : !isAdmin && hadEntry ? "Submit request" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
