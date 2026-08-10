@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { UtensilsCrossed, Shield, User } from "lucide-react";
+import { Shield, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/icons/Mess pilot white.png";
 
 const schema = z.object({
   email: z.string().trim().email("Invalid email").max(255),
@@ -105,9 +106,7 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center p-4 gradient-hero">
       <Card className="w-full max-w-md p-8 gradient-card shadow-elevated border-border/50">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center mb-4 shadow-glow">
-            <UtensilsCrossed className="w-7 h-7 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="MessPilot" className="w-14 h-14 rounded-2xl mb-4 shadow-glow object-contain" />
           <h1 className="text-2xl font-bold">MessPilot</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "signin" ? `Sign in as ${loginType}` : "Create your account"}

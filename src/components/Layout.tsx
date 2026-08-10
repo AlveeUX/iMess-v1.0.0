@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/icons/Mess pilot white.png";
 import { NavLink } from "@/components/NavLink";
 import { useOpenCorrectionsCount, useMonthData } from "@/hooks/useMessData";
 import { Badge } from "@/components/ui/badge";
@@ -97,9 +98,7 @@ export const Layout = () => {
       <header className="lg:hidden sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="MessPilot" className="w-8 h-8 rounded-lg object-contain" />
             <span className="font-bold">MessPilot</span>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setOpen(!open)}>
@@ -123,9 +122,7 @@ export const Layout = () => {
         {/* Desktop sidebar */}
         <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-border bg-sidebar">
           <div className="p-6 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
-              <UtensilsCrossed className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="MessPilot" className="w-10 h-10 rounded-xl object-contain shadow-glow" />
             <div>
               <div className="font-bold tracking-tight">MessPilot</div>
               <div className="text-xs text-muted-foreground">{roleLabel}</div>
