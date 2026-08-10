@@ -15,10 +15,11 @@ import {
   ArrowRight,
   Plus,
   ScrollText,
+  Check,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, getDate, getDaysInMonth } from "date-fns";
 import { Link } from "react-router-dom";
 
 const Stat = ({ label, value, icon: Icon, sub }: { label: string; value: string; icon: any; sub?: string }) => (
@@ -38,7 +39,7 @@ const Stat = ({ label, value, icon: Icon, sub }: { label: string; value: string;
 
 const Dashboard = () => {
   const { data, isLoading } = useMonthData();
-  const { isAdmin, isContributor } = useAuth();
+  const { isAdmin, isContributor, user } = useAuth();
   const corrections = useOpenCorrectionsCount();
 
   const { data: recentLogs } = useQuery({
@@ -51,6 +52,18 @@ const Dashboard = () => {
 
   if (isLoading || !data) return <div className="text-muted-foreground">Loading…</div>;
   const showAlerts = isAdmin && (data.pendingCount > 0 || (corrections.data ?? 0) > 0);
+
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const displayName = (user?.user_metadata?.display_name as string | undefined) || user?.email?.split("@")[0] || "there";
+  const dayOfMonth = getDate(now);
+  const daysInMonth = getDaysInMonth(now);
+  const monthLabel = format(now, "MMMM").toUpperCase();
+  const todayStr = format(now, "yyyy-MM-dd");
+  const mealsToday = data.meals.filter((m) => m.date === todayStr).reduce((s, m) => s + Number(m.meal_count), 0);
+  const reviewCount = isAdmin ? data.pendingCount + (corrections.data ?? 0) : 0;
+  const headline = reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} need${reviewCount === 1 ? "s" : ""} your review` : "You're all caught up";
 
   return (
     <div className="space-y-6">
@@ -93,18 +106,65 @@ const Dashboard = () => {
         </div>
       )}
 
-      <Card className="p-6 md:p-8 gradient-card border-primary/20 shadow-elevated relative overflow-hidden">
-        <div className="absolute inset-0 gradient-hero opacity-60 pointer-events-none" />
-        <div className="relative flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-widest text-muted-foreground font-semibold">Live meal rate</p>
-            <p className="mt-3 text-5xl md:text-6xl font-bold text-gradient">৳{fmtMoney(data.rate)}</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              ৳{fmtMoney(data.totalExpense)} approved bazar ÷ {fmtMoney(data.totalMeals)} meals
+      <Card className="p-6 md:p-8 rounded-3xl bg-card border-primary/20 shadow-elevated relative overflow-hidden">
+        <div className="absolute inset-0 gradient-hero opacity-70 pointer-events-none" />
+        <div className="absolute -right-16 -bottom-16 w-72 h-72 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-stretch justify-between gap-6">
+          <div className="flex flex-col justify-center">
+            <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">
+              {greeting}, {displayName}
             </p>
+            <h2 className="mt-2 text-3xl md:text-4xl font-bold">{headline}</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              Day {dayOfMonth}/{daysInMonth} · ৳{fmtMoney(data.totalExpense)} bazar · {fmtMoney(mealsToday)} meal{mealsToday === 1 ? "" : "s"} logged today.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {isAdmin && (
+                <Button asChild className="rounded-full bg-foreground text-background hover:bg-foreground/90">
+                  <Link to="/bazar?tab=pending">
+                    <Check className="w-4 h-4 mr-2" />
+                    Review approvals
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline" className="rounded-full bg-transparent border-border/60 hover:bg-white/5">
+                <Link to="/report">View analytics</Link>
+              </Button>
+            </div>
           </div>
-          <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
-            <TrendingUp className="w-8 h-8 text-primary-foreground" />
+
+          <div className="lg:w-[300px] shrink-0 rounded-2xl bg-background/40 border border-border/50 backdrop-blur-sm p-5 flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">Meal rate · {monthLabel}</p>
+              <Badge variant="secondary" className="rounded-full text-[10px] shrink-0">
+                {data.isClosed ? "Final rate" : "Live rate"}
+              </Badge>
+            </div>
+            <p className="mt-3 text-4xl font-bold tabular-nums">
+              <span className="text-lg align-top mr-0.5">৳</span>
+              {fmtMoney(data.rate)}
+              <span className="text-base font-normal text-muted-foreground">/meal</span>
+            </p>
+            <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-4 divide-x divide-border/40">
+              <div className="pr-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Meals</p>
+                <p className="text-sm font-bold tabular-nums mt-0.5">{fmtMoney(data.totalMeals)}</p>
+              </div>
+              <div className="px-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Bazar MTD</p>
+                <p className="text-sm font-bold tabular-nums mt-0.5">৳{fmtMoney(data.totalExpense)}</p>
+              </div>
+              <div className="px-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Net due</p>
+                <p className="text-sm font-bold tabular-nums mt-0.5">৳{fmtMoney(data.dueBalance)}</p>
+              </div>
+              <div className="pl-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Day</p>
+                <p className="text-sm font-bold tabular-nums mt-0.5">
+                  {dayOfMonth}/{daysInMonth}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </Card>
