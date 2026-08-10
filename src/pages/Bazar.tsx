@@ -89,17 +89,46 @@ const Bazar = () => {
     setOpen(true);
   };
 
-  // Rejected entries are immutable — "resubmit" pre-fills a brand-new entry
-  // from the rejected one instead of editing it in place.
-  const openResubmit = (e: any) => {
-    setEditingId(null);
-    setForm({
+  // Inline resubmit: a rejected entry can be edited in place and sent
+  // back to pending, instead of opening the dialog / creating a new row.
+  const [resubmittingId, setResubmittingId] = useState<string | null>(null);
+  const [resubmitForm, setResubmitForm] = useState(blankForm());
+  const [resubmitSaving, setResubmitSaving] = useState(false);
+
+  const startResubmit = (e: any) => {
+    setResubmittingId(e.id);
+    setResubmitForm({
       title: e.title,
       amount: String(e.amount),
       category: e.category,
-      date: format(new Date(), "yyyy-MM-dd"),
+      date: e.date,
     });
-    setOpen(true);
+  };
+  const cancelResubmit = () => setResubmittingId(null);
+
+  const saveResubmit = async () => {
+    const parsed = schema.safeParse({ ...resubmitForm, amount: parseFloat(resubmitForm.amount) });
+    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+    setResubmitSaving(true);
+    try {
+      const { error } = await supabase
+        .from("expenses")
+        .update({
+          title: resubmitForm.title.trim(),
+          amount: parseFloat(resubmitForm.amount),
+          category: resubmitForm.category,
+          date: resubmitForm.date,
+        })
+        .eq("id", resubmittingId);
+      if (error) throw error;
+      toast.success("Resubmitted for admin approval");
+      qc.invalidateQueries({ queryKey: ["month-data"] });
+      setResubmittingId(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setResubmitSaving(false);
+    }
   };
 
   const submit = async (ev: React.FormEvent) => {
@@ -307,51 +336,105 @@ const Bazar = () => {
           {visible
             .slice()
             .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
-            .map((e) => (
-              <div key={e.id} className="p-4 flex items-center gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium truncate">{e.title}</span>
-                    {statusBadge(e.status)}
+            .map((e) =>
+              resubmittingId === e.id ? (
+                <div key={e.id} className="p-4 bg-warning/5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center gap-2 text-xs font-medium text-warning">
+                    <RotateCcw className="w-3.5 h-3.5" /> Resubmitting — edit and send back to admin
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {format(new Date(e.date), "MMM d")} · {e.category} · by{" "}
-                    {e.submitted_by === user?.id ? (
-                      <span className="text-foreground/80 font-medium">You</span>
-                    ) : e.submitted_by ? (
-                      <Link
-                        to={`/bazar/member/${e.submitted_by}`}
-                        className="text-primary font-medium hover:underline"
-                      >
-                        {nameOf(e.submitted_by)}
-                      </Link>
-                    ) : (
-                      <span className="text-foreground/80 font-medium">—</span>
-                    )}
-                    {e.review_note && ` · "${e.review_note}"`}
+                  <Input
+                    value={resubmitForm.title}
+                    onChange={(ev) => setResubmitForm({ ...resubmitForm, title: ev.target.value })}
+                    placeholder="Title"
+                    maxLength={80}
+                    className="h-9"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={resubmitForm.amount}
+                      onChange={(ev) => setResubmitForm({ ...resubmitForm, amount: ev.target.value })}
+                      placeholder="Amount"
+                      className="h-9"
+                    />
+                    <Select value={resubmitForm.category} onValueChange={(v) => setResubmitForm({ ...resubmitForm, category: v })}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bazar">Bazar</SelectItem>
+                        <SelectItem value="utility">Utility</SelectItem>
+                        <SelectItem value="gas">Gas</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="date"
+                      value={resubmitForm.date}
+                      onChange={(ev) => setResubmitForm({ ...resubmitForm, date: ev.target.value })}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={cancelResubmit} disabled={resubmitSaving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={saveResubmit} disabled={resubmitSaving}>
+                      <Check className="w-4 h-4 mr-2" /> {resubmitSaving ? "Sending…" : "Resubmit"}
+                    </Button>
                   </div>
                 </div>
-                <div className="font-bold tabular-nums text-lg">৳{fmtMoney(Number(e.amount))}</div>
-                {isAdmin && e.status === "pending" && !locked && (
-                  <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
-                )}
-                {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
-                  <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                )}
-                {!isAdmin && e.submitted_by === user?.id && e.status === "rejected" && !locked && !blocked && (
-                  <Button size="sm" variant="outline" onClick={() => openResubmit(e)}>
-                    <RotateCcw className="w-4 h-4 mr-2" /> Resubmit
-                  </Button>
-                )}
-                {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (
-                  <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                )}
-              </div>
-            ))}
+              ) : (
+                <div key={e.id} className="p-4 flex items-center gap-3 flex-wrap transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium truncate">{e.title}</span>
+                      {statusBadge(e.status)}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(e.date), "MMM d")} · {e.category} · by{" "}
+                      {e.submitted_by === user?.id ? (
+                        <span className="text-foreground/80 font-medium">You</span>
+                      ) : e.submitted_by ? (
+                        <Link
+                          to={`/bazar/member/${e.submitted_by}`}
+                          className="text-primary font-medium hover:underline"
+                        >
+                          {nameOf(e.submitted_by)}
+                        </Link>
+                      ) : (
+                        <span className="text-foreground/80 font-medium">—</span>
+                      )}
+                      {e.review_note && ` · "${e.review_note}"`}
+                    </div>
+                  </div>
+                  <div className="font-bold tabular-nums text-lg">৳{fmtMoney(Number(e.amount))}</div>
+                  {isAdmin && e.status === "pending" && !locked && (
+                    <Button size="sm" onClick={() => { setReviewing(e); setReviewNote(""); }}>Review</Button>
+                  )}
+                  {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
+                    <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {!isAdmin && e.submitted_by === user?.id && e.status === "rejected" && !locked && !blocked && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="transition-transform active:scale-[0.97]"
+                      onClick={() => startResubmit(e)}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" /> Resubmit
+                    </Button>
+                  )}
+                  {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (
+                    <Button size="icon" variant="ghost" aria-label="Delete bazar entry" onClick={() => remove(e.id)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              )
+            )}
           {visible.length === 0 && (
             <div className="p-12 text-center text-muted-foreground">Nothing here.</div>
           )}

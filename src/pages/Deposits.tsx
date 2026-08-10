@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
 import { useSearchParams } from "react-router-dom";
@@ -122,6 +122,43 @@ const Deposits = () => {
     const { error } = await supabase.from("deposits").delete().eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["month-data"] });
+  };
+
+  // Inline resubmit: a rejected (non-bazar-linked) deposit can be edited
+  // in place and sent back to pending, instead of a dialog / new row.
+  const [resubmittingId, setResubmittingId] = useState<string | null>(null);
+  const [resubmitForm, setResubmitForm] = useState({ amount: "", method: "cash", date: format(new Date(), "yyyy-MM-dd"), note: "" });
+  const [resubmitSaving, setResubmitSaving] = useState(false);
+
+  const startResubmit = (d: any) => {
+    setResubmittingId(d.id);
+    setResubmitForm({ amount: String(d.amount), method: d.method, date: d.date, note: d.note ?? "" });
+  };
+  const cancelResubmit = () => setResubmittingId(null);
+
+  const saveResubmit = async () => {
+    const amount = parseFloat(resubmitForm.amount);
+    if (!amount || amount <= 0) return toast.error("Amount must be > 0");
+    setResubmitSaving(true);
+    try {
+      const { error } = await supabase
+        .from("deposits")
+        .update({
+          amount,
+          method: resubmitForm.method,
+          date: resubmitForm.date,
+          note: resubmitForm.note.trim() || null,
+        })
+        .eq("id", resubmittingId);
+      if (error) throw error;
+      toast.success("Resubmitted for admin approval");
+      qc.invalidateQueries({ queryKey: ["month-data"] });
+      setResubmittingId(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setResubmitSaving(false);
+    }
   };
 
   if (isLoading || !data) return <div className="text-muted-foreground">Loading…</div>;
@@ -257,6 +294,59 @@ const Deposits = () => {
               const m = data.members.find((x) => x.id === d.member_id);
               const status = d.status ?? "approved";
               const isAuto = !!d.source_expense_id;
+
+              if (resubmittingId === d.id) {
+                return (
+                  <div key={d.id} className="p-4 bg-warning/5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="flex items-center gap-2 text-xs font-medium text-warning">
+                      <RotateCcw className="w-3.5 h-3.5" /> Resubmitting — edit and send back to admin
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={resubmitForm.amount}
+                        onChange={(ev) => setResubmitForm({ ...resubmitForm, amount: ev.target.value })}
+                        placeholder="Amount"
+                        className="h-9"
+                      />
+                      <Select value={resubmitForm.method} onValueChange={(v) => setResubmitForm({ ...resubmitForm, method: v })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="bkash">bKash</SelectItem>
+                          <SelectItem value="nagad">Nagad</SelectItem>
+                          <SelectItem value="bank">Bank</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="date"
+                        value={resubmitForm.date}
+                        onChange={(ev) => setResubmitForm({ ...resubmitForm, date: ev.target.value })}
+                        className="h-9"
+                      />
+                    </div>
+                    <Input
+                      value={resubmitForm.note}
+                      onChange={(ev) => setResubmitForm({ ...resubmitForm, note: ev.target.value })}
+                      placeholder="Note (optional)"
+                      maxLength={200}
+                      className="h-9"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={cancelResubmit} disabled={resubmitSaving}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={saveResubmit} disabled={resubmitSaving}>
+                        <Check className="w-4 h-4 mr-2" /> {resubmitSaving ? "Sending…" : "Resubmit"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={d.id} className="flex items-center justify-between p-4 gap-3 flex-wrap">
                   <div className="min-w-0 flex-1">
@@ -279,6 +369,16 @@ const Deposits = () => {
                     <span className="font-bold tabular-nums">৳{fmtMoney(Number(d.amount))}</span>
                     {isAdmin && status === "pending" && !locked && !isAuto && (
                       <Button size="sm" onClick={() => { setReviewing(d); setReviewNote(""); }}>Review</Button>
+                    )}
+                    {!isAdmin && !isAuto && status === "rejected" && d.submitted_by === user?.id && !locked && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="transition-transform active:scale-[0.97]"
+                        onClick={() => startResubmit(d)}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" /> Resubmit
+                      </Button>
                     )}
                     {!isAuto && ((isAdmin && !locked) ||
                       (!isAdmin && status === "pending" && d.submitted_by === user?.id && !locked)) && (
