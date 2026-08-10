@@ -13,7 +13,6 @@ import {
   ScrollText,
   MessageSquareWarning,
   Receipt,
-  Megaphone,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,7 @@ import logo from "@/assets/icons/Mess pilot white.png";
 import { NavLink } from "@/components/NavLink";
 import { useOpenCorrectionsCount, useMonthData } from "@/hooks/useMessData";
 import { Badge } from "@/components/ui/badge";
+import { ReleaseNotesDialog } from "@/components/ReleaseNotesDialog";
 
 interface NavEntry {
   to: string;
@@ -61,7 +61,6 @@ export const Layout = () => {
   ];
 
   const nav = baseNav.filter((n) => !n.adminOnly || isAdmin);
-  const releaseNotesEntry: NavEntry = { to: "/release-notes", label: "Release notes", icon: Megaphone };
 
   const roleLabel = isAdmin
     ? "Admin"
@@ -113,7 +112,7 @@ export const Layout = () => {
               {nav.map((n) => renderItem(n, true))}
             </nav>
             <div className="border-t border-border p-2 space-y-1">
-              {renderItem(releaseNotesEntry, true)}
+              <ReleaseNotesDialog mobile onTriggerClick={() => setOpen(false)} />
               <button
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary"
@@ -139,7 +138,7 @@ export const Layout = () => {
             {nav.map((n) => renderItem(n))}
           </nav>
           <div className="p-3 border-t border-sidebar-border space-y-1">
-            {renderItem(releaseNotesEntry)}
+            <ReleaseNotesDialog />
             <div className="px-3 py-2 text-xs text-muted-foreground truncate">{user?.email}</div>
             <button
               onClick={handleSignOut}
