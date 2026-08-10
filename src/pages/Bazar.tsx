@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil, Info } from "lucide-react";
+import { Plus, Trash2, Lock, Check, X, Clock, ShoppingBasket, Pencil, Info, RotateCcw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { fmtMoney } from "@/lib/mess";
 import { useSearchParams, Link } from "react-router-dom";
@@ -85,6 +85,19 @@ const Bazar = () => {
       amount: String(e.amount),
       category: e.category,
       date: e.date,
+    });
+    setOpen(true);
+  };
+
+  // Rejected entries are immutable — "resubmit" pre-fills a brand-new entry
+  // from the rejected one instead of editing it in place.
+  const openResubmit = (e: any) => {
+    setEditingId(null);
+    setForm({
+      title: e.title,
+      amount: String(e.amount),
+      category: e.category,
+      date: format(new Date(), "yyyy-MM-dd"),
     });
     setOpen(true);
   };
@@ -157,6 +170,9 @@ const Bazar = () => {
 
   if (isLoading || !data) return <div className="text-muted-foreground">Loading…</div>;
   const locked = data.isClosed;
+  const myMember = data.members.find((m: any) => m.id === memberId);
+  const blocked = !isAdmin && !!myMember?.bazar_blocked;
+  const rejectStreak = myMember?.bazar_reject_streak ?? 0;
 
   // Visibility: approved items are public to all signed-in users.
   // Pending / rejected items only show to the submitter (or admin).
@@ -189,7 +205,7 @@ const Bazar = () => {
             </p>
           </div>
         </div>
-        {!locked && (
+        {!locked && !blocked && (
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(blankForm()); } }}>
             <DialogTrigger asChild>
               <Button size="lg" onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Submit bazar</Button>
@@ -257,6 +273,26 @@ const Bazar = () => {
         </Card>
       )}
 
+      {blocked && (
+        <Card className="p-4 border-destructive/40 bg-destructive/5 flex items-center gap-3">
+          <ShieldAlert className="w-4 h-4 text-destructive shrink-0" />
+          <p className="text-sm">
+            You've had 3 bazar entries rejected in a row, so new submissions are blocked. Ask an admin to unblock you on the Members page.
+          </p>
+        </Card>
+      )}
+
+      {!blocked && rejectStreak > 0 && (
+        <Card className="p-4 border-warning/40 bg-warning/5 flex items-center gap-3">
+          <ShieldAlert className="w-4 h-4 text-warning shrink-0" />
+          <p className="text-sm">
+            {rejectStreak === 1
+              ? "Your last bazar entry was rejected. One more rejection in a row and you'll be blocked from submitting."
+              : "Your last 2 bazar entries were rejected. One more and you'll be blocked from submitting."}
+          </p>
+        </Card>
+      )}
+
       <Tabs value={tab} onValueChange={(v) => { params.set("tab", v); setParams(params, { replace: true }); }}>
         <TabsList className="grid grid-cols-4 w-full sm:w-auto">
           <TabsTrigger value="all">All <span className="ml-1 opacity-60">{data.expenses.length}</span></TabsTrigger>
@@ -302,6 +338,11 @@ const Bazar = () => {
                 {!isAdmin && e.submitted_by === user?.id && e.status === "pending" && !locked && (
                   <Button size="icon" variant="ghost" aria-label="Edit bazar entry" onClick={() => openEdit(e)}>
                     <Pencil className="w-4 h-4" />
+                  </Button>
+                )}
+                {!isAdmin && e.submitted_by === user?.id && e.status === "rejected" && !locked && !blocked && (
+                  <Button size="sm" variant="outline" onClick={() => openResubmit(e)}>
+                    <RotateCcw className="w-4 h-4 mr-2" /> Resubmit
                   </Button>
                 )}
                 {!locked && (isAdmin || (e.submitted_by === user?.id && e.status === "pending")) && (

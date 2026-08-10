@@ -477,6 +477,8 @@ export type Database = {
       }
       members: {
         Row: {
+          bazar_blocked: boolean
+          bazar_reject_streak: number
           created_at: string
           id: string
           is_active: boolean
@@ -487,6 +489,8 @@ export type Database = {
           seat_name: string | null
         }
         Insert: {
+          bazar_blocked?: boolean
+          bazar_reject_streak?: number
           created_at?: string
           id?: string
           is_active?: boolean
@@ -497,6 +501,8 @@ export type Database = {
           seat_name?: string | null
         }
         Update: {
+          bazar_blocked?: boolean
+          bazar_reject_streak?: number
           created_at?: string
           id?: string
           is_active?: boolean

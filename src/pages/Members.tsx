@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Link2, Unlink, Crown, Utensils, Wallet, ShoppingBasket, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, Unlink, Crown, Utensils, Wallet, ShoppingBasket, Zap, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { fmtMoney } from "@/lib/mess";
@@ -157,6 +157,16 @@ const Members = () => {
   const toggleActive = async (m: any) => {
     const { error } = await supabase.from("members").update({ is_active: !m.is_active }).eq("id", m.id);
     if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["members"] });
+  };
+
+  const unblockBazar = async (m: any) => {
+    const { error } = await supabase
+      .from("members")
+      .update({ bazar_blocked: false, bazar_reject_streak: 0 })
+      .eq("id", m.id);
+    if (error) return toast.error(error.message);
+    toast.success(`${m.name} unblocked — fresh 3-strike allowance`);
     qc.invalidateQueries({ queryKey: ["members"] });
   };
 
@@ -349,6 +359,19 @@ const Members = () => {
                     </div>
                   </div>
                 </div>
+
+                {m.bazar_blocked && (
+                  <div className="mt-3 flex items-center justify-between gap-2 p-2 rounded-md bg-destructive/5 border border-destructive/20">
+                    <span className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Bazar submissions blocked (3 rejected in a row)
+                    </span>
+                    {isAdmin && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => unblockBazar(m)}>
+                        Unblock
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 {isAdmin && (
                   <div className="mt-4 pt-4 border-t border-border space-y-3">

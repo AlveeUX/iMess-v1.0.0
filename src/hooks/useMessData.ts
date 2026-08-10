@@ -8,7 +8,7 @@ export const useMembers = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("members")
-        .select("id, name, room, seat_name, rent_amount, is_active, created_at")
+        .select("id, name, room, seat_name, rent_amount, is_active, created_at, bazar_reject_streak, bazar_blocked")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -39,7 +39,10 @@ export const useMonthData = (date: Date = new Date()) => {
         supabase.from("meals").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("deposits").select("*").gte("date", r.start).lte("date", r.end),
         supabase.from("expenses").select("*").gte("date", r.start).lte("date", r.end),
-        supabase.from("members").select("id, name, room, seat_name, rent_amount, is_active, created_at").order("name"),
+        supabase
+          .from("members")
+          .select("id, name, room, seat_name, rent_amount, is_active, created_at, bazar_reject_streak, bazar_blocked")
+          .order("name"),
         supabase.from("months").select("*").eq("month", r.monthKey).maybeSingle(),
         supabase.from("bills_v2").select("*").gte("due_date", r.start).lte("due_date", r.end),
         supabase.from("bill_items").select("*"),
@@ -106,7 +109,7 @@ export const useMonthData = (date: Date = new Date()) => {
           .filter((x) => x.member_id === m.id)
           .reduce((s, x) => s + Number(x.meal_count), 0);
         const memberDeposits = (deposits.data ?? [])
-          .filter((x) => x.member_id === m.id)
+          .filter((x) => x.member_id === m.id && ((x as any).status ?? "approved") === "approved")
           .reduce((s, x) => s + Number(x.amount), 0);
         const cost = memberMeals * rate;
         const dues = memberDuesMap[m.id] ?? { rent: 0, utility: 0 };
