@@ -163,7 +163,8 @@ A member-initiated request queue for anything they can't fix themselves. Meal ch
 
 ### 5.9 Transparency — `/transparency`
 
-- A read-only, paginated, filterable feed of every `activity_logs` entry — filter by entity type or action, or free-text search across actor and content.
+- A read-only, paginated, filterable feed of every `activity_logs` entry, visible to every signed-in member and not just admins — filter by entity type or action, or free-text search across actor, affected member, or content.
+- Each entry shows who acted and what changed; where the row has a natural target (a meal, deposit, correction, or the member record itself), a "for [Member]" badge names who it was for.
 - Positioned in-product as the trust guarantee: *"Nobody can edit or delete past entries."*
 
 ### 5.10 Report — `/report`
