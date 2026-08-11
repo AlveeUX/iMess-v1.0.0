@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +27,7 @@ import {
 import { toast } from "sonner";
 import { MessageSquareWarning, Plus, Check, X, Zap } from "lucide-react";
 
-type RequestKind = "meal" | "away" | "back" | "other";
+type RequestKind = "away" | "back" | "other";
 
 const statusMeta: Record<string, { cls: string; label: string }> = {
   open: { cls: "bg-warning/15 text-warning border-warning/30", label: "Open" },
@@ -42,10 +41,8 @@ const Corrections = () => {
   const [open, setOpen] = useState(false);
   const [reviewing, setReviewing] = useState<any>(null);
   const [reviewNote, setReviewNote] = useState("");
-  const [kind, setKind] = useState<RequestKind>("meal");
+  const [kind, setKind] = useState<RequestKind>("away");
   const [form, setForm] = useState({
-    date: format(new Date(), "yyyy-MM-dd"),
-    meal_count: "1",
     reason: "",
   });
 
@@ -104,15 +101,7 @@ const Corrections = () => {
     let requested_value: any = null;
     let month: string | null = null;
 
-    if (kind === "meal") {
-      entity_type = "meals";
-      requested_value = {
-        member_id: memberId,
-        date: form.date,
-        meal_count: parseFloat(form.meal_count) || 0,
-      };
-      month = form.date.slice(0, 7) + "-01";
-    } else if (kind === "away") {
+    if (kind === "away") {
       entity_type = "members";
       requested_value = { member_id: memberId, is_active: false };
     } else if (kind === "back") {
@@ -133,8 +122,8 @@ const Corrections = () => {
     qc.invalidateQueries({ queryKey: ["corrections"] });
     qc.invalidateQueries({ queryKey: ["corrections-open-count"] });
     setOpen(false);
-    setForm({ date: format(new Date(), "yyyy-MM-dd"), meal_count: "1", reason: "" });
-    setKind("meal");
+    setForm({ reason: "" });
+    setKind("away");
   };
 
   const reject = async () => {
@@ -214,7 +203,7 @@ const Corrections = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Requests</h1>
             <p className="text-muted-foreground mt-1">
-              Ask admin to update your meal count or mark you away.
+              Ask admin to mark you away, mark you back, or flag something else.
             </p>
           </div>
         </div>
@@ -230,25 +219,12 @@ const Corrections = () => {
                 <Select value={kind} onValueChange={(v) => setKind(v as RequestKind)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="meal">Update my meal count</SelectItem>
                     <SelectItem value="away">I'll be away (mark inactive)</SelectItem>
                     <SelectItem value="back">I'm back (mark active)</SelectItem>
                     <SelectItem value="other">Something else</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {kind === "meal" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Meals</Label>
-                    <Input type="number" step="0.5" min="0" value={form.meal_count} onChange={(e) => setForm({ ...form, meal_count: e.target.value })} />
-                  </div>
-                </div>
-              )}
               <div className="space-y-2">
                 <Label>Reason / note *</Label>
                 <Textarea

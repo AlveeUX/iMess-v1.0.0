@@ -17,6 +17,11 @@ const Settings = () => {
 
   const closeMonth = async () => {
     if (!data) return;
+    if (data.pendingMealsCount > 0) {
+      return toast.error(
+        `${data.pendingMealsCount} meal ${data.pendingMealsCount === 1 ? "entry is" : "entries are"} still pending review — approve or reject them on the Meals page before closing.`
+      );
+    }
     if (!confirm(`Close ${data.range.label}? After closing, no edits are allowed.`)) return;
     const payload = {
       month: data.range.monthKey,
@@ -86,13 +91,19 @@ const Settings = () => {
             <div className="text-lg font-bold">{data.isClosed ? "Closed 🔒" : "Open"}</div>
           </div>
         </div>
+        {isAdmin && !data.isClosed && data.pendingMealsCount > 0 && (
+          <p className="text-xs text-warning mb-3">
+            {data.pendingMealsCount} meal {data.pendingMealsCount === 1 ? "entry is" : "entries are"} still
+            pending review — approve or reject them on the Meals page before closing.
+          </p>
+        )}
         {isAdmin ? (
           data.isClosed ? (
             <Button onClick={reopenMonth} variant="outline" className="w-full">
               <Unlock className="w-4 h-4 mr-2" /> Reopen month
             </Button>
           ) : (
-            <Button onClick={closeMonth} className="w-full" size="lg">
+            <Button onClick={closeMonth} className="w-full" size="lg" disabled={data.pendingMealsCount > 0}>
               <Lock className="w-4 h-4 mr-2" /> Close {data.range.label}
             </Button>
           )

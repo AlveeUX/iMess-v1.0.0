@@ -61,7 +61,9 @@ const Dashboard = () => {
   const daysInMonth = getDaysInMonth(now);
   const monthLabel = format(now, "MMMM").toUpperCase();
   const todayStr = format(now, "yyyy-MM-dd");
-  const mealsToday = data.meals.filter((m) => m.date === todayStr).reduce((s, m) => s + Number(m.meal_count), 0);
+  const mealsToday = data.meals
+    .filter((m: any) => m.date === todayStr && (m.status ?? "approved") === "approved")
+    .reduce((s, m) => s + Number(m.meal_count), 0);
   const reviewCount = isAdmin ? data.pendingCount + (corrections.data ?? 0) : 0;
   const headline = reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} need${reviewCount === 1 ? "s" : ""} your review` : "You're all caught up";
 

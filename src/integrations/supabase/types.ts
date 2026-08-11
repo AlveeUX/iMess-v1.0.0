@@ -24,6 +24,7 @@ export type Database = {
           entity_id: string | null
           entity_type: string
           id: string
+          member_id: string | null
           month: string | null
           note: string | null
         }
@@ -36,6 +37,7 @@ export type Database = {
           entity_id?: string | null
           entity_type: string
           id?: string
+          member_id?: string | null
           month?: string | null
           note?: string | null
         }
@@ -48,10 +50,19 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string
           id?: string
+          member_id?: string | null
           month?: string | null
           note?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bill_items: {
         Row: {
@@ -371,6 +382,10 @@ export type Database = {
           id: string
           meal_count: number
           member_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
         }
         Insert: {
           created_at?: string
@@ -378,6 +393,10 @@ export type Database = {
           id?: string
           meal_count?: number
           member_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
         }
         Update: {
           created_at?: string
@@ -385,6 +404,10 @@ export type Database = {
           id?: string
           meal_count?: number
           member_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
         }
         Relationships: [
           {

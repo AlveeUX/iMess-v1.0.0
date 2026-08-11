@@ -41,7 +41,7 @@ The product is built for one mess at a time — a single admin (or small admin t
 - Give every member real-time visibility into the meal rate and their own balance — no waiting for month-end.
 - Let members submit money-affecting entries (deposits, bazar, bill payments) without an admin needing to be present, while keeping an admin as the final approver before anything counts.
 - Make every change auditable: an append-only activity log any member can read.
-- Let members self-serve corrections (a missed meal, a trip home) instead of pinging the admin directly — while keeping an admin in the loop before a correction to an already-logged entry becomes final.
+- Let members self-serve corrections (a missed meal, a trip home) instead of pinging the admin directly — while keeping an admin in the loop before any entry becomes final.
 
 ### Non-goals — current version
 
@@ -70,7 +70,7 @@ Every signed-in account is linked **1:1 to a member record** (`member_links`) �
 Recomputed live, for the currently open month, every time a meal or an approved bazar entry changes:
 
 ```
-meal_rate = total_approved_bazar_expense ÷ total_meals_logged
+meal_rate = total_approved_bazar_expense ÷ total_approved_meals
 ```
 
 ### 4.2 Member balance
@@ -95,7 +95,7 @@ One `bill_item` per member, amount defaulting to that member's configured `rent_
 
 ### 4.5 Month close
 
-An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_rate` onto the `months` table and marks it closed. While closed, meals, deposits, and bazar entries become read-only across the app. Reopening clears the closed flag; the snapshot values remain until the next close.
+An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_rate` onto the `months` table and marks it closed. While closed, meals, deposits, and bazar entries become read-only across the app. Closing is blocked while any meal entry for that month is still `pending` — admin has to approve or reject everything first. Reopening clears the closed flag; the snapshot values remain until the next close.
 
 ## 5. Feature specification
 
@@ -124,11 +124,14 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 
 ### 5.4 Meals — `/meals`
 
-- Calendar grid for the month; tap a day to set that member's meal count in 0.5 increments, with 0–3 quick-set buttons. Members edit only their own linked meals; admins can select and edit any member.
-- **First-time entry is instant.** Logging a day that has no entry yet writes directly — no approval needed, so routine daily logging never touches the admin queue.
-- **Editing or clearing an already-logged day requires admin approval** (members only — admins always write directly). The change is submitted as a `correction_requests` row (`entity_type: 'meals'`) instead of updating `meals` directly; this is enforced by RLS, not just the UI — the "Member update/delete own meals" policies were removed, so a direct write attempt on an existing row is rejected at the database level regardless of what the client sends. The calendar shows a "pending" badge with the proposed count on days with an open request, and blocks opening the editor again for that day until it's resolved.
+- Compact calendar grid for the month; tap a day to set that member's meal count in 0.5 increments, with 0–3 quick-set buttons. Members edit only their own linked meals; admins can select and edit any member.
+- **Every non-admin write defaults to pending.** Logging a new day and editing or clearing an existing one both write directly to `meals` — there's no "first entry vs. edit" distinction anymore. A database trigger (`enforce_meal_submission`) forces the row's `status` to `pending` for anyone who isn't an admin; a member can keep changing the value freely while it's pending, and again after a rejection. The calendar shows a "pending" or "rejected" badge with the current count.
+- **Pending entries don't count.** The meal rate and every member's total only include `approved` rows — a pending or rejected entry is invisible to billing until an admin acts on it.
+- **Admin writes are self-approved.** The same trigger auto-approves and stamps `reviewed_by` / `reviewed_at` on any admin write, so admin's normal Save both records and approves the entry in one action — there's no separate "Approve" button. Admin instead gets an inline **Reject** action on pending days.
+- **Once approved, a member can't touch it again.** RLS scopes the member update/delete policies to rows with `status IN ('pending', 'rejected')` — an approved row has no member-writable path at all; only admin retains unrestricted access, enforced at the database level regardless of what the client sends.
+- **Future days are locked for members.** A member can't open the editor for a date after today; admin is unaffected (e.g. to log ahead on someone's behalf).
 - Members can also mark themselves away for a date range (auto-approved if fully in the future and the affected months are open; otherwise held for admin review).
-- Fully locked once the month is closed.
+- Fully locked once the month is closed; closing itself is blocked while any meal for that month is still pending (see §4.5).
 
 ### 5.5 Deposits — `/deposits`
 
@@ -152,11 +155,11 @@ Rent and utilities, tracked separately from the meal ledger.
 
 ### 5.8 Corrections — `/corrections`
 
-A member-initiated request queue for anything they can't fix themselves — including, now, editing an already-logged meal day (see §5.4), which lands here under the same review flow as explicit requests.
+A member-initiated request queue for anything they can't fix themselves. Meal changes no longer route through here — see §5.4; they're submitted and reviewed directly on the Meals calendar. (Meal requests submitted before that change may still appear here for historical review.)
 
-1. **Member requests** — update a past day's meal count, mark themselves away / back (inactive / active), or describe something else in free text — plus a required reason.
+1. **Member requests** — mark themselves away / back (inactive / active), or describe something else in free text — plus a required reason.
 2. **Request lands as open** — visible to the requester and every admin, with the requested change summarized.
-3. **Admin resolves it** — *Approve & apply* (for meal or active-status requests, the system applies the change immediately via the `apply_correction` database function), *Approve (manual)* (for anything the system can't apply automatically), or *Reject* (with an optional note). Every outcome is logged.
+3. **Admin resolves it** — *Approve & apply* (for active-status requests, and legacy meal requests, the system applies the change immediately via the `apply_correction` database function), *Approve (manual)* (for anything the system can't apply automatically), or *Reject* (with an optional note). Every outcome is logged.
 
 ### 5.9 Transparency — `/transparency`
 
@@ -184,32 +187,31 @@ Thirteen tables in the `public` schema, backing the features above.
 | `members` | The household roster | `name, phone, room, seat_name, rent_amount, is_active` |
 | `member_links` | 1:1 link between a member and a login | `member_id, user_id` |
 | `user_roles` | Role grants, many per user | `user_id, role` |
-| `meals` | Daily meal count per member | `member_id, date, meal_count` |
+| `meals` | Daily meal count per member | `member_id, date, meal_count, status, reviewed_by, reviewed_at` |
 | `deposits` | Money members put in | `member_id, amount, method, status, submitted_by` |
 | `expenses` | Bazar / shared spend | `title, amount, category, status, submitted_by` |
 | `bills_v2` | A rent or utility bill | `bill_type, title, total_amount, due_date, due_month` |
 | `bill_items` | One member's share of a bill | `bill_id, member_id, amount, status, paid_on` |
-| `correction_requests` | Member fix requests, incl. in-place meal edits | `entity_type, requested_value, status, reason` |
+| `correction_requests` | Member fix requests (away/back, free-text; legacy meal edits) | `entity_type, requested_value, status, reason` |
 | `member_away_periods` | Member-declared away date ranges | `member_id, start_date, end_date, status` |
 | `months` | Per-month close snapshot | `month, is_closed, final_meal_rate, total_expense` |
 | `signup_allowlist` | Emails permitted to register | `email, note, created_by` |
-| `activity_logs` | Append-only audit trail | `action, entity_type, actor_email, diff, month` |
+| `activity_logs` | Append-only audit trail | `action, entity_type, actor_email, member_id, diff, month` |
 | `profiles` | Display name per user | `user_id, display_name` |
 
-Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, and `apply_correction` for the corrections auto-apply path. Twenty-five versioned SQL migrations under `supabase/migrations` define this schema today.
+Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, `enforce_meal_submission` for the meal pending/approve trigger, and `apply_correction` for the corrections auto-apply path. Thirty versioned SQL migrations under `supabase/migrations` define this schema today.
 
 ## 7. Approval workflows
 
-Every entry that moves money — or changes what a member is credited for once it's already on the record — follows the same shape: a non-admin submission starts *pending* and only counts once an admin acts on it. Admin-entered records, and a member's *first-time* entry of a not-yet-logged day, are recorded directly.
+Every entry that moves money, or that changes what a member is credited for, follows the same shape: a non-admin submission starts *pending* and only counts once an admin acts on it. Admin-entered records are always recorded directly, self-approved.
 
 | Entity | Who can submit | States | Once approved |
 |---|---|---|---|
 | Deposit | Member (own), Admin (any) | `pending → approved / rejected` | Counts toward that member's balance |
 | Bazar / expense | Contributor, Admin | `pending → approved / rejected` | Counts toward the month's meal rate |
 | Bill payment | Member (own share) | `unpaid → pending_review → paid / unpaid` | Share marked settled with a paid date |
-| Meal entry (new day) | Member (own), Admin (any) | Written directly — no approval step | Counts immediately toward meals/rate |
-| Meal edit (existing day) | Member (own) | `open → approved / rejected` (via `correction_requests`) | Meal count updated via `apply_correction` |
-| Correction request (other) | Member (own record) | `open → approved / rejected` | Meal count or active status updated, if auto-applied |
+| Meal entry (any day, new or edited) | Member (own), Admin (any) | `pending → approved / rejected`, directly on the `meals` row; member can keep editing while `pending`/`rejected` | Counts toward meals/rate; locked from further member edits |
+| Correction request (away/back, other) | Member (own record) | `open → approved / rejected` | Active status updated, if auto-applied |
 
 ## 8. Technical architecture
 
@@ -219,7 +221,7 @@ Every entry that moves money — or changes what a member is credited for once i
 
 **Hosting & config.** Deployed on Vercel. Supabase project id, URL, and anon key are supplied via `VITE_`-prefixed env vars; the project id is also pinned in `supabase/config.toml` for the CLI migration workflow.
 
-**Schema management.** Twenty-five versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
+**Schema management.** Thirty versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
 
 ## 9. Branding
 
@@ -231,7 +233,7 @@ Every entry that moves money — or changes what a member is credited for once i
 
 - **Mobile-first input.** Large tap targets, 1–2 taps to log a meal — the product's own stated usability bar.
 - **Currency.** All amounts in Taka (৳), formatted to a maximum of 2 decimals through one shared helper.
-- **Default-safe writes.** Non-admin submissions that touch money — or that change an already-logged meal day — default to pending; nothing a member submits silently becomes truth without an admin action, except a brand-new (not-yet-logged) meal entry.
+- **Default-safe writes.** Non-admin submissions that touch money, or any meal entry a member logs or edits, default to pending; nothing a member submits silently becomes truth without an admin action.
 - **Auditability.** State-changing actions are expected to land in `activity_logs` so the Transparency page stays a complete record, with no edit/delete surface exposed for past entries.
 
 ## 11. Known gaps
@@ -240,7 +242,7 @@ Observed directly in the current codebase — not aspirational, these are real a
 
 - **Duplicate expense entry point.** An `/expenses` route and page exist alongside `/bazar`, covering a slice of the same "log a shared expense" job but with no approval workflow and no entry in the navigation sidebar. Worth retiring or folding into Bazar.
 - **Dashboard placeholders.** Four KPI tiles — Bills unpaid, Rent collected, Rent due, Active agreements — are explicit "Coming soon" placeholders, even though the Bills data they'd need already exists in `bills_v2` / `bill_items`. The dashboard just isn't wired to it yet.
-- **No way to withdraw a correction request.** `correction_requests` has no delete policy, so once a member submits one (including an in-place meal edit — see §5.4), only an admin can resolve it; the member can't cancel a request they submitted by mistake.
+- **No way to withdraw a correction request.** `correction_requests` has no delete policy, so once a member submits an away/back or free-text request, only an admin can resolve it; the member can't cancel a request they submitted by mistake. (Meal entries are the exception — a member can freely edit or clear their own pending/rejected meal row up until admin approves it, see §5.4.)
 - **No PDF export.** The Report page — the natural "send this to the group" artifact — offers only `window.print()`, not a generated PDF.
 - **No notification channel.** Nothing pushes a pending approval, a bill due date, or a correction response to a member outside the app itself — they have to go check.
 

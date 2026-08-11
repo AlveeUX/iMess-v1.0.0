@@ -46,6 +46,16 @@ const entityLabel: Record<string, string> = {
   correction_requests: "Correction",
 };
 
+// Reference columns already surfaced separately (actor / target) — drop them
+// from the raw "what changed" summary so it doesn't repeat a bare UUID.
+const idLikeKeys = new Set([
+  "member_id",
+  "submitted_by",
+  "reviewed_by",
+  "requested_by",
+  "user_id",
+]);
+
 const Transparency = () => {
   const qc = useQueryClient();
   const [entity, setEntity] = useState<string>("all");
@@ -69,12 +79,27 @@ const Transparency = () => {
     },
   });
 
+  // For resolving "for whom" — the member a meal/deposit/correction/member
+  // row belongs to — from the raw id buried in the log's diff.
+  const { data: members } = useQuery({
+    queryKey: ["members-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("members").select("id, name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const memberName = (id?: string | null) =>
+    id ? members?.find((m) => m.id === id)?.name : undefined;
+
   const filtered = (data?.rows ?? []).filter((r) => {
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
       r.actor_email?.toLowerCase().includes(s) ||
       r.entity_type.toLowerCase().includes(s) ||
+      memberName(r.member_id)?.toLowerCase().includes(s) ||
       JSON.stringify(r.diff ?? {}).toLowerCase().includes(s)
     );
   });
@@ -120,7 +145,7 @@ const Transparency = () => {
             </SelectContent>
           </Select>
           <Input
-            placeholder="Search email or content…"
+            placeholder="Search email, member, or content…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -141,12 +166,17 @@ const Transparency = () => {
               const meta = actionMeta[r.action] ?? actionMeta.updated;
               const Icon = meta.icon;
               const diff = r.diff as any;
+              const strip = (obj: Record<string, unknown> | undefined) =>
+                Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => !idLikeKeys.has(k)));
+              const after = strip(diff?.after);
+              const before = strip(diff?.before);
               const summary =
-                diff?.after && Object.keys(diff.after).length
-                  ? Object.entries(diff.after).slice(0, 3).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(" · ")
-                  : diff?.before && Object.keys(diff.before).length
-                  ? `was ${JSON.stringify(diff.before).slice(0, 80)}`
+                Object.keys(after).length
+                  ? Object.entries(after).slice(0, 3).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(" · ")
+                  : Object.keys(before).length
+                  ? `was ${JSON.stringify(before).slice(0, 80)}`
                   : "";
+              const target = memberName(r.member_id);
               return (
                 <li key={r.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30 transition-colors">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${meta.cls}`}>
@@ -158,6 +188,9 @@ const Transparency = () => {
                         {entityLabel[r.entity_type] ?? r.entity_type}
                       </span>
                       <Badge variant="outline" className="text-xs">{meta.label}</Badge>
+                      {target && (
+                        <Badge variant="secondary" className="text-xs">for {target}</Badge>
+                      )}
                       {r.month && (
                         <Badge variant="secondary" className="text-xs">
                           {format(new Date(r.month), "MMM yyyy")}

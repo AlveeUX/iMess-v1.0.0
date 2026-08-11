@@ -64,7 +64,10 @@ export const useMonthData = (date: Date = new Date()) => {
       const approvedDeposits = allDeposits.filter((d) => (d.status ?? "approved") === "approved");
       const pendingDeposits = allDeposits.filter((d) => d.status === "pending");
 
-      const totalMeals = (meals.data ?? []).reduce((s, m) => s + Number(m.meal_count), 0);
+      const allMeals = (meals.data ?? []) as any[];
+      const approvedMeals = allMeals.filter((m) => (m.status ?? "approved") === "approved");
+      const pendingMeals = allMeals.filter((m) => m.status === "pending");
+      const totalMeals = approvedMeals.reduce((s, m) => s + Number(m.meal_count), 0);
       const totalExpense = approvedExpenses.reduce((s, e) => s + Number(e.amount), 0);
       const pendingTotal = pendingExpenses.reduce((s, e) => s + Number(e.amount), 0);
       const totalDeposits = approvedDeposits.reduce((s, d) => s + Number(d.amount), 0);
@@ -105,7 +108,7 @@ export const useMonthData = (date: Date = new Date()) => {
       }
 
       const perMember = (members.data ?? []).map((m) => {
-        const memberMeals = (meals.data ?? [])
+        const memberMeals = approvedMeals
           .filter((x) => x.member_id === m.id)
           .reduce((s, x) => s + Number(x.meal_count), 0);
         const memberDeposits = (deposits.data ?? [])
@@ -142,7 +145,9 @@ export const useMonthData = (date: Date = new Date()) => {
 
       return {
         range: r,
-        meals: meals.data ?? [],
+        meals: allMeals,
+        pendingMeals,
+        pendingMealsCount: pendingMeals.length,
         deposits: deposits.data ?? [],
         expenses: allExpenses,
         approvedExpenses,
