@@ -221,3 +221,25 @@ work, not forgotten):
 - The pre-existing `## 6. Data model` table header in the PRD says
   "Thirteen tables" but lists fourteen rows — predates this session,
   left alone (out of scope for what was asked).
+
+### 2026-08-12 — Show/hide toggle on the password field
+
+**Requested**: add a "view" icon to the password input on the auth page
+so admin and member users can check what they actually typed before
+submitting.
+
+**What changed**: `src/pages/Auth.tsx` — the single password `Input`
+(shared by both sign-in and sign-up, since it's one form with a `mode`
+toggle) is now wrapped in a `relative` div with a `lucide-react`
+Eye/EyeOff button absolutely positioned inside it. Local `showPassword`
+state flips the input's `type` between `password`/`text`; the button is
+`type="button"` (so it doesn't submit the form) and `tabIndex={-1}` (so
+Tab skips straight from the password field to Submit). No backend or
+schema change — purely client-side UI.
+
+**Verification**: Live-tested in the running dev server (`npm run
+dev`, port 8080) via browser automation — typed a password, confirmed
+it rendered masked, clicked the eye icon, confirmed it revealed the
+literal typed text and the icon swapped to eye-off, and confirmed the
+same field/behavior in sign-up mode too (shared component). Not pushed
+anywhere — this is a local, uncommitted change pending user review.
