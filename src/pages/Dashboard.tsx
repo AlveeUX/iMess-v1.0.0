@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,11 +17,13 @@ import {
   Plus,
   ScrollText,
   Check,
+  X,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, getDate, getDaysInMonth } from "date-fns";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 const Stat = ({ label, value, icon: Icon, sub }: { label: string; value: string; icon: any; sub?: string }) => (
   <Card className="p-5 gradient-card border-border/50 shadow-card">
@@ -41,6 +44,8 @@ const Dashboard = () => {
   const { data, isLoading } = useMonthData();
   const { isAdmin, isContributor, user } = useAuth();
   const corrections = useOpenCorrectionsCount();
+  const qc = useQueryClient();
+  const [savingMealId, setSavingMealId] = useState<string | null>(null);
 
   const { data: recentLogs } = useQuery({
     queryKey: ["activity_logs", "recent"],
@@ -64,8 +69,27 @@ const Dashboard = () => {
   const mealsToday = data.meals
     .filter((m: any) => m.date === todayStr && (m.status ?? "approved") === "approved")
     .reduce((s, m) => s + Number(m.meal_count), 0);
-  const reviewCount = isAdmin ? data.pendingCount + (corrections.data ?? 0) : 0;
+  const reviewCount = isAdmin ? data.pendingCount + data.pendingMealsCount + (corrections.data ?? 0) : 0;
   const headline = reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} need${reviewCount === 1 ? "s" : ""} your review` : "You're all caught up";
+
+  const memberNameById = new Map(data.members.map((m) => [m.id, m.name]));
+  const pendingMealsSorted = isAdmin
+    ? [...data.pendingMeals].sort((a: any, b: any) => a.date.localeCompare(b.date))
+    : [];
+
+  const reviewMeal = async (id: string, status: "approved" | "rejected") => {
+    setSavingMealId(id);
+    try {
+      const { error } = await supabase.from("meals").update({ status }).eq("id", id);
+      if (error) throw error;
+      toast.success(status === "approved" ? "Meal approved" : "Meal rejected");
+      qc.invalidateQueries({ queryKey: ["month-data"] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingMealId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -106,6 +130,45 @@ const Dashboard = () => {
             </Link>
           )}
         </div>
+      )}
+
+      {isAdmin && pendingMealsSorted.length > 0 && (
+        <Card className="p-5 gradient-card border-warning/30 shadow-card">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold flex items-center gap-2">
+              <UtensilsCrossed className="w-4 h-4 text-warning" />
+              Pending meal approvals
+            </h2>
+            <Badge variant="secondary">{pendingMealsSorted.length}</Badge>
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {pendingMealsSorted.map((pm: any) => (
+              <div key={pm.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-secondary/50">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{memberNameById.get(pm.member_id) ?? "Unknown member"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {format(new Date(pm.date), "MMM d")} · {fmtMoney(pm.meal_count)} meal{Number(pm.meal_count) === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    disabled={savingMealId === pm.id}
+                    onClick={() => reviewMeal(pm.id, "rejected")}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="sm" disabled={savingMealId === pm.id} onClick={() => reviewMeal(pm.id, "approved")}>
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Approve
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       <Card className="p-6 md:p-8 rounded-3xl bg-card border-primary/20 shadow-elevated relative overflow-hidden">

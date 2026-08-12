@@ -4,6 +4,8 @@ Updates shown to everyone in the app, newest first. Add new entries directly bel
 
 ## August 12, 2026
 
+- **Quick meal approvals.** Admins now see pending meal entries right on the Dashboard, with one-tap Approve/Reject.
+- **Fixed: meal approvals were silently failing.** Approving, rejecting, or editing a meal entry could fail behind the scenes since yesterday's update — fixed.
 - **See your password.** A show/hide icon on the password field lets you check it before signing in.
 
 ## August 11, 2026

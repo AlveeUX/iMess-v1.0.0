@@ -277,3 +277,82 @@ verified by reading the raw markdown and relying on the fact that
 `ReactMarkdown` already renders this exact file shape (H2 + bullets)
 correctly in every prior release-notes commit. Worth a quick manual
 look in-app next time someone's signed in.
+
+### 2026-08-12 — Critical fix: `log_change()` trigger crashed on almost every UPDATE since the previous session; Dashboard quick meal-approval list
+
+**Requested**: "admin also can't edit the days for meal update" (same as
+members) and meal approval should be easier — surfaced as a request for
+a pending-meal-approvals list on the Dashboard for one-click review.
+
+**Root cause (not what it looked like)**: this had nothing to do with
+roles or the future-day/approved-day lock in `Meals.tsx` — those checks
+were already correctly gated behind `!isAdmin` and admin's DB policies
+(`Admin update meals` etc.) have no future-day restriction. The actual
+bug: `public.log_change()` — one generic `AFTER INSERT OR UPDATE OR
+DELETE` trigger function attached to nearly every table (`meals`,
+`deposits`, `expenses`, `members`, `months`, `user_roles`,
+`correction_requests`, `bills_v2`, `bill_items`, ...) — had its UPDATE
+branch (added in the previous session's
+`20260811190000_activity_logs_visible_to_all.sql`) read `OLD.status` /
+`NEW.status` / `OLD.is_closed` / `NEW.is_closed` **directly**. Those
+columns don't exist on every table the trigger fires on (`meals` and
+`deposits` have no `is_closed`; `months` has no `status`). Referencing a
+field that doesn't exist on a trigger's `OLD`/`NEW` record throws
+Postgres error 42703 ("record has no field ...") the instant that
+branch's condition is evaluated — even inside an `AND` guarded by
+`TG_TABLE_NAME = '...'` that would make the branch false, because
+record-field resolution isn't short-circuited the way a plain boolean
+would be. Confirmed empirically: clicking Approve on a pending meal sent
+a `PATCH .../meals?id=eq....` that came back `400`, body `{"code":
+"42703", "message": "record \"old\" has no field \"is_closed\""}`.
+
+**Blast radius**: any UPDATE on any of those tables that didn't happen
+to match the *first* branch it hit crashed outright. `expenses`
+status-changing updates were the one path that looked fine (that branch
+matches first and short-circuits before reaching the broken ones) —
+which is exactly why bazar approve/reject seemed to work while meal
+approvals silently 400'd. By the same logic this also broke: a member
+editing/resubmitting their own pending or rejected meal, deposit
+reviews whose status doesn't change on that particular UPDATE, member
+edits, and (by code inspection, not live-tested — didn't want to
+actually flip the live month's closed state to check) Settings'
+close/reopen month, since `months` rows hit the `OLD.status` reference
+in the very first branch immediately. INSERTs and DELETEs were
+unaffected — they never reach this branch.
+
+**Fix**: `supabase/migrations/20260812120000_fix_log_change_generic_trigger_crash.sql`
+replaces every direct `OLD.field`/`NEW.field` read in the UPDATE branch
+with the same `to_jsonb(OLD)->>'field'` pattern the function already
+used elsewhere (for `date`/`month`/`member_id`) for exactly this reason
+— jsonb key lookup on a missing key returns `NULL` instead of erroring.
+Also added a `meals` branch alongside the existing `expenses` one (they
+now share the same status-column shape) so meal approvals/rejections
+log as `"approved"`/`"rejected"` in the activity feed instead of a
+generic `"updated"`. Pushed straight to production via `supabase db
+push` after explicit user confirmation, given it was actively breaking
+live approvals.
+
+**Also added**: a "Pending meal approvals" card on `Dashboard.tsx`,
+visible to admins whenever `data.pendingMealsCount > 0` (that field
+already existed in `useMessData.ts` from the previous session but was
+never wired in — flagged as a known follow-up at the time). Lists every
+pending meal across all members with inline Approve/Reject buttons
+(`supabase.from("meals").update({status}).eq("id", ...)`, same pattern
+as `Meals.tsx`'s existing `rejectDay`/admin-save), no navigation or
+per-member calendar hunting required. Also folded
+`data.pendingMealsCount` into the Dashboard headline's `reviewCount`,
+which previously only summed bazar + corrections.
+
+**Verification**: Reproduced the 400 live against production (both via
+the actual UI button and a replayed raw `fetch` for the exact same
+request, to pull the precise Postgres error out of the response body
+Supabase's JS client swallows into a generic message). After pushing
+the fix, re-tested the same Approve action end-to-end: succeeded,
+`activity_logs` shows a clean `action: "approved"` row with correct
+`reviewed_by`/`reviewed_at`, Dashboard totals and live meal rate
+recalculated correctly. Reject wasn't separately live-tested (no second
+pending row available without member credentials to create one) but
+shares the exact same fixed function and an already-proven code path.
+**Not tested**: Settings' close/reopen month (didn't want to flip live
+state just to check) — fixed by the same migration by inspection, worth
+a quick admin-side check next time a month actually needs closing.
