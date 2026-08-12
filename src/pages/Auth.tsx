@@ -112,7 +112,7 @@ const Auth = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-primary transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 tabIndex={-1}
               >
