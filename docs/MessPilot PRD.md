@@ -56,10 +56,9 @@ Every signed-in account is linked **1:1 to a member record** (`member_links`) �
 
 | Role | Who they are |
 |---|---|
-| `super_admin` | The mess owner account. Everything an admin can do, plus granting or revoking `admin` and handing off `super_admin` itself. |
-| `admin` | Manages members, reviews and approves deposits/bazar/bill payments/corrections, closes and reopens the month, and maintains the signup allowlist. |
-| `bazar_contributor` | A trusted member allowed to submit bazar (grocery) purchases for reimbursement. Granted per-member by an admin. |
-| `member` (default) | Logs their own meals, submits their own deposits, requests corrections, and reads reports and the transparency log. |
+| `super_admin` | The mess owner account. Everything an admin can do, plus granting or revoking `admin` — the only role that can. |
+| `admin` | Manages members, reviews and approves deposits/bazar/bill payments/corrections, closes and reopens the month, and maintains the signup allowlist. Granted only by a super admin, so the mess can keep running day-to-day if the super admin is away. Cannot grant, revoke, or remove `admin` or `super_admin` itself. |
+| `member` (default) | Logs their own meals, submits their own deposits and bazar purchases, requests corrections, and reads reports and the transparency log. |
 
 **Single sign-in flow.** There is one sign-in form — no Admin/Member portal picker. After authenticating, the app reads the account's real roles from `user_roles` and adjusts what's visible accordingly; there's no separate "wrong portal" state to hit. Enforcement lives entirely in the database's row-level security functions (`has_role`, `is_admin_or_super`) — the UI never gates anything RLS wouldn't already gate.
 
@@ -110,7 +109,7 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 - Greeting/status hero banner: time-of-day greeting with the signed-in user's display name, a headline that reads "You're all caught up" or switches to "N items need your review" for admins with open bazar/correction queues, and the day's context line (day-of-month, month-to-date bazar, meals logged today).
 - Hero banner also carries the primary actions — a "Review approvals" button (admin-only, deep-links into the pending bazar queue) and "View analytics" (links to Report) — alongside a live meal-rate panel showing the current rate, a Live rate/Final rate badge, and four mini-stats (meals, bazar MTD, net due, day of month).
 - For admins: alert cards above the hero for pending bazar review and open correction requests, linking straight into the filtered queue.
-- Quick-action row: Add meal / Add deposit (admin), Submit bazar (contributor), Activity link.
+- Quick-action row: Add meal / Add deposit / Submit bazar (admin), Activity link.
 - KPI tiles: total bazar, total deposits, total meals, net advance/due.
 - Per-member settlement list and the last 6 transparency-log entries.
 - Four placeholder KPI tiles (Bills unpaid, Rent collected, Rent due, Active agreements) marked "Coming soon" — see §11.
@@ -119,7 +118,7 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 
 - Admin: add / edit / deactivate / delete a member (name, phone, room, seat or bed label, monthly rent).
 - Admin: link a member record to a signed-up account (1:1) and unlink it.
-- Admin: grant or revoke `bazar_contributor` per member; a super admin can additionally grant/revoke `admin` and hand off `super_admin` (behind a confirmation dialog, since it can only be undone by another super admin).
+- Super admin: grant or revoke `admin` per member, and hand off `super_admin` (behind a confirmation dialog). Only a super admin can grant, revoke, or remove `admin`/`super_admin` — a plain admin has no role-management UI at all.
 - Everyone: a per-member card showing this month's meals, deposits, bazar contributed, and utility due — visible mess-wide by design.
 
 ### 5.4 Meals — `/meals`
@@ -141,9 +140,9 @@ An admin action that snapshots `total_expense`, `total_meals`, and `final_meal_r
 
 ### 5.6 Bazar — `/bazar`
 
-- Admins and `bazar_contributor` members submit a bazar entry (title, amount, category, date).
+- Any signed-in member submits a bazar entry (title, amount, category, date).
 - Admin approves or rejects with a note; only approved bazar counts toward the meal rate.
-- Non-admin contributors see only their own submissions; admins see and manage all.
+- Non-admin members see only their own submissions; admins see and manage all.
 
 ### 5.7 Bills — `/bills`
 
@@ -209,7 +208,7 @@ Every entry that moves money, or that changes what a member is credited for, fol
 | Entity | Who can submit | States | Once approved |
 |---|---|---|---|
 | Deposit | Member (own), Admin (any) | `pending → approved / rejected` | Counts toward that member's balance |
-| Bazar / expense | Contributor, Admin | `pending → approved / rejected` | Counts toward the month's meal rate |
+| Bazar / expense | Member (own), Admin (any) | `pending → approved / rejected` | Counts toward the month's meal rate |
 | Bill payment | Member (own share) | `unpaid → pending_review → paid / unpaid` | Share marked settled with a paid date |
 | Meal entry (any day, new or edited) | Member (own), Admin (any) | `pending → approved / rejected`, directly on the `meals` row; member can keep editing while `pending`/`rejected` | Counts toward meals/rate; locked from further member edits |
 | Correction request (away/back, other) | Member (own record) | `open → approved / rejected` | Active status updated, if auto-applied |

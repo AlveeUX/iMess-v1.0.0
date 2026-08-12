@@ -56,7 +56,7 @@ const statusBadge = (status: string) => {
 
 const Bazar = () => {
   const { data, isLoading } = useMonthData();
-  const { isAdmin, isContributor, user, memberId } = useAuth();
+  const { isAdmin, user, memberId } = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as "pending" | "approved" | "rejected" | "all") ?? "all";

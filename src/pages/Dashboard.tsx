@@ -42,7 +42,7 @@ const Stat = ({ label, value, icon: Icon, sub }: { label: string; value: string;
 
 const Dashboard = () => {
   const { data, isLoading } = useMonthData();
-  const { isAdmin, isContributor, user } = useAuth();
+  const { isAdmin, user } = useAuth();
   const corrections = useOpenCorrectionsCount();
   const qc = useQueryClient();
   const [savingMealId, setSavingMealId] = useState<string | null>(null);
@@ -237,7 +237,7 @@ const Dashboard = () => {
       <div className="flex flex-wrap gap-2">
         {isAdmin && <Button variant="outline" asChild><Link to="/meals"><Plus className="w-4 h-4 mr-2" />Add meal</Link></Button>}
         {isAdmin && <Button variant="outline" asChild><Link to="/deposits"><Plus className="w-4 h-4 mr-2" />Add deposit</Link></Button>}
-        {isContributor && <Button variant="outline" asChild><Link to="/bazar"><Plus className="w-4 h-4 mr-2" />Submit bazar</Link></Button>}
+        {isAdmin && <Button variant="outline" asChild><Link to="/bazar"><Plus className="w-4 h-4 mr-2" />Submit bazar</Link></Button>}
         <Button variant="ghost" asChild className="ml-auto"><Link to="/transparency"><ScrollText className="w-4 h-4 mr-2" />Activity</Link></Button>
       </div>
 

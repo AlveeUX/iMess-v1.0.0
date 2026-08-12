@@ -34,7 +34,7 @@ interface NavEntry {
 }
 
 export const Layout = () => {
-  const { signOut, user, isAdmin, isContributor, roles } = useAuth();
+  const { signOut, user, isAdmin, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -62,13 +62,7 @@ export const Layout = () => {
 
   const nav = baseNav.filter((n) => !n.adminOnly || isAdmin);
 
-  const roleLabel = isAdmin
-    ? "Admin"
-    : isContributor
-    ? "Bazar Contributor"
-    : roles.length > 0
-    ? "Member"
-    : "Member";
+  const roleLabel = isSuperAdmin ? "Super Admin" : isAdmin ? "Admin" : "Member";
 
   const renderItem = (n: NavEntry, mobile = false) => (
     <NavLink

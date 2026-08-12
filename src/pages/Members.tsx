@@ -48,7 +48,7 @@ const schema = z.object({
 });
 
 type AuthUser = { id: string; email: string; display_name: string | null };
-type RoleRow = { user_id: string; role: "admin" | "bazar_contributor" | "member" | "super_admin" };
+type RoleRow = { user_id: string; role: "admin" | "member" | "super_admin" };
 type LinkRow = { member_id: string; user_id: string };
 
 const Members = () => {
@@ -196,7 +196,7 @@ const Members = () => {
     qc.invalidateQueries({ queryKey: ["member-links-all"] });
   };
 
-  const toggleRole = async (userId: string, role: "admin" | "bazar_contributor", on: boolean) => {
+  const toggleRole = async (userId: string, role: "admin", on: boolean) => {
     if (on) {
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
       if (error) return toast.error(error.message);
@@ -404,27 +404,18 @@ const Members = () => {
                       </div>
                     </div>
 
-                    {linkedUserId && (
+                    {linkedUserId && isSuperAdmin && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">Roles</Label>
                         <div className="flex gap-3 text-xs flex-wrap">
-                          {isSuperAdmin && (
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <Checkbox
-                                checked={userRoles.has("admin")}
-                                onCheckedChange={(v) => toggleRole(linkedUserId, "admin", !!v)}
-                              />
-                              Admin
-                            </label>
-                          )}
                           <label className="flex items-center gap-1.5 cursor-pointer">
                             <Checkbox
-                              checked={userRoles.has("bazar_contributor")}
-                              onCheckedChange={(v) => toggleRole(linkedUserId, "bazar_contributor", !!v)}
+                              checked={userRoles.has("admin")}
+                              onCheckedChange={(v) => toggleRole(linkedUserId, "admin", !!v)}
                             />
-                            Bazar contributor
+                            Admin
                           </label>
-                          {isSuperAdmin && !isMemberSuper && (
+                          {!isMemberSuper && (
                             <Button
                               size="sm"
                               variant="outline"

@@ -356,3 +356,91 @@ shares the exact same fixed function and an already-proven code path.
 **Not tested**: Settings' close/reopen month (didn't want to flip live
 state just to check) — fixed by the same migration by inspection, worth
 a quick admin-side check next time a month actually needs closing.
+
+### 2026-08-12 — Retired `bazar_contributor`; promoted Alvee to `super_admin`
+
+**Requested**: user asked what `bazar_contributor` was actually for and
+concluded (correctly) there was no practical use case; asked to replace
+it with a real `admin` tier, move the existing admin account to
+`super_admin`, and confirmed super_admin should be the only role able to
+grant `admin` (with plain admins unable to touch the admin/super_admin
+tier at all) "so the mess can keep running in the absence of the super
+admin."
+
+**Root cause of "no use case"**: traced via git history — the
+contributor-gated `expenses` INSERT policy was replaced on 2026-06-04
+(`20260604191519_...sql`) with one open to every authenticated member,
+and nothing ever filled the gap. Confirmed live: `Bazar.tsx`'s submit
+button has no role check, only `!locked && !blocked`. Every holder
+(Alvee, Prosen, Test — literally everyone with an account at the time)
+had it, and it did nothing.
+
+**Also discovered while planning**: `super_admin` (added May 2026) had
+*never actually been used* in this project's real data. The original
+one-time backfill (`20260512180248_...sql`, "promote the oldest admin
+to super_admin") ran before any real user existed and silently matched
+zero rows — this went unnoticed for three months because `is_admin_or_
+super()` makes `isAdmin` true for either tier, so nothing behaved
+differently. Verified live before touching anything: zero `super_admin`
+rows in production; Alvee held `admin` + `bazar_contributor`; Prosen and
+Test held `member` + `bazar_contributor`.
+
+**Approach**: planned via `/plan` before writing any code, per explicit
+request. Two decisions were confirmed with the user before finalizing:
+fully remove `bazar_contributor` from the Postgres enum (vs. leaving it
+defined-but-unused) despite the extra migration risk of no staging
+environment to rehearse against; and drop Prosen/Test back to plain
+`member` rather than promoting them to `admin` too, since the role never
+granted them anything functional to begin with.
+
+**Critical technique**: Postgres can't drop a single enum value — only
+rename-old/create-new/migrate-column/drop-old works, and every function
+or policy with an argument typed to the old enum breaks unless
+explicitly rebuilt. Rather than hand-tracing dependencies through 15+
+migration files (this project's own history shows applied-state can
+diverge from what the files alone would suggest), queried the **live**
+schema directly: `npx supabase db query --linked "<sql>"` against
+`pg_policies`/`pg_proc`/`information_schema`. This caught a real trap a
+file-only approach would have missed — a legacy `bills` table (fully
+superseded by `bills_v2`, 0 rows) still had 3 live policies calling
+`has_role()`, which would have made a plain `DROP FUNCTION` fail
+mid-migration. Ended up with an exact, verified list of every dependent
+object (1 function, 5 policies) instead of guessing.
+
+**What changed**:
+- `supabase/migrations/20260812150000_retire_bazar_contributor_promote_super_admin.sql`
+  — deletes all `bazar_contributor` rows; runs the original May 12
+  backfill pattern now that a real admin exists (promotes Alvee to
+  `super_admin`, drops her now-redundant `admin` row); swaps the
+  `app_role` enum to `member`/`admin`/`super_admin` only; drops and
+  rebuilds `has_role(uuid, app_role)` and the 5 dependent policies
+  (`Admin delete/insert/update bills`, `Roles delete/insert tiered`)
+  against the new type, verbatim, no logic changes. The tiered grant
+  policy (`WHEN 'admin' THEN has_role(..., 'super_admin')`) and the
+  `prevent_last_super_admin_delete` trigger already fully satisfied "only
+  super admin can grant/revoke admin" and "admin can't remove
+  super_admin" — nothing new needed there, just confirmed they survive
+  the swap.
+- Frontend: removed `bazar_contributor` from `AppRole` (`useAuth.tsx`)
+  and the hand-maintained `types.ts` enum mirror (no `supabase gen
+  types` step in this repo, see Quick orientation above); removed the
+  now-always-equal-to-`isAdmin` `isContributor` concept entirely rather
+  than leave a vestigial flag; removed the "Bazar contributor" checkbox
+  from `Members.tsx` (the "Admin" checkbox and "Make super admin" button
+  stay, already correctly gated behind `isSuperAdmin`); `RoleBadge.tsx`
+  lost its contributor entry; `Layout.tsx`'s sidebar now shows "Super
+  Admin" distinctly (reusing the label that already existed in
+  `RoleBadge.tsx` but was never surfaced in the sidebar) instead of
+  collapsing every elevated account down to "Admin".
+
+**Verification**: re-ran the same live introspection queries used during
+planning, post-migration — enum is exactly the 3 values; Alvee holds
+only `super_admin`; Prosen/Test hold only `member`; zero
+`bazar_contributor` rows anywhere; `has_role`'s signature and all 5
+rebuilt policies present under the new type. `npx tsc --noEmit` clean
+across the whole project. **Not click-tested in the browser this
+round** (granting `admin` to a test member as super-admin, confirming a
+plain-admin viewer can't see the role UI) — the SQL-level guarantees
+(RLS policy + trigger, unchanged logic) and the type-check give high
+confidence, but worth a real UI pass next time someone's signed in as
+Alvee.

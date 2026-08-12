@@ -4,6 +4,8 @@ Updates shown to everyone in the app, newest first. Add new entries directly bel
 
 ## August 12, 2026
 
+- **Simpler roles.** Removed the unused "Bazar Contributor" role — bazar submission has always been open to every member anyway. Only Member, Admin, and Super Admin remain.
+- **Super Admin, for real this time.** The account that started the mess is now Super Admin, and can promote any member to Admin so the mess keeps running smoothly if they're away. Only a Super Admin can grant, revoke, or remove Admin.
 - **Quick meal approvals.** Admins now see pending meal entries right on the Dashboard, with one-tap Approve/Reject.
 - **Fixed: meal approvals were silently failing.** Approving, rejecting, or editing a meal entry could fail behind the scenes since yesterday's update — fixed.
 - **See your password.** A show/hide icon on the password field lets you check it before signing in.
