@@ -241,5 +241,39 @@ schema change — purely client-side UI.
 dev`, port 8080) via browser automation — typed a password, confirmed
 it rendered masked, clicked the eye icon, confirmed it revealed the
 literal typed text and the icon swapped to eye-off, and confirmed the
-same field/behavior in sign-up mode too (shared component). Not pushed
-anywhere — this is a local, uncommitted change pending user review.
+same field/behavior in sign-up mode too (shared component). Committed
+(`1bfef11`) and pushed to `main`/production.
+
+### 2026-08-12 — Password-toggle hover color fix; release notes reordered and shortened
+
+**Requested**: the eye icon's hover color (`hover:text-foreground`,
+near-white) was invisible against the dark input background; separately,
+make the release-notes modal show the newest entry first and trim each
+bullet down to one on-point sentence.
+
+**What changed**:
+- `src/pages/Auth.tsx` — hover color changed from `hover:text-foreground`
+  to `hover:text-primary` (the brand orange), which reads clearly against
+  the dark input background regardless of state. Committed `04736e7`,
+  pushed to `main`.
+- `docs/RELEASE_NOTES.md` — added an `## August 12, 2026` section above
+  `## August 11, 2026` (new dated sections go directly under the intro
+  line, per the file's own "newest first" convention at the top) covering
+  the password-visibility toggle. Rewrote every existing bullet down to
+  one short sentence each — the previous entries ran 2-3 sentences with
+  a lot of restated mechanism detail. `ReleaseNotesDialog.tsx` just
+  renders this file's raw markdown top-to-bottom with no sorting
+  logic, so ordering is a pure content convention, not a code fix —
+  the important bit for future entries is to keep adding new dated
+  sections at the top, not the bottom.
+
+**Verification**: Hover fix confirmed visually via browser automation
+(zoomed screenshot of the icon mid-hover, unmistakably orange). Release
+notes change was **not** visually confirmed in the actual modal — no
+member/admin session was available in the browser this round (the only
+known credential had just been sent through a password-reset email
+earlier the same session, so nothing to sign in with), so this was
+verified by reading the raw markdown and relying on the fact that
+`ReactMarkdown` already renders this exact file shape (H2 + bullets)
+correctly in every prior release-notes commit. Worth a quick manual
+look in-app next time someone's signed in.
