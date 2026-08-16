@@ -505,3 +505,42 @@ doing before anyone next removes a member from the UI.
 row (Alvee, role `super_admin`). Not click-tested in the browser (no
 data left to click through) — verified entirely via
 `npx supabase db query --linked` against the live database.
+
+### 2026-08-16 — Fixed the member-delete trigger crash found above
+
+**Requested**: fix the `log_change()` / `trg_log_members` bug the
+fresh-start wipe surfaced (previous entry) — deleting any `members` row
+was 400ing in production, not just during that migration.
+
+**What changed**:
+- `supabase/migrations/20260816130000_fix_log_change_members_delete_fk.sql`
+  — `CREATE OR REPLACE FUNCTION public.log_change()`, one condition
+  changed. The self-referential "for whom" fallback
+  (`v_member_id := v_entity_id` when `TG_TABLE_NAME = 'members'` and
+  the generic member_id-from-JSON lookup came back NULL, since
+  `members` has no `member_id` column) now only applies when
+  `TG_OP <> 'DELETE'`. On a members DELETE, `v_member_id` stays NULL
+  instead of pointing at the row that AFTER-trigger timing means is
+  already gone — which was the exact FK violation
+  (`activity_logs_member_id_fkey`, 23503) from the previous entry.
+  INSERT/UPDATE behavior on `members` is unchanged (still tags the log
+  row with its own id).
+
+**Verification**: pushed via `supabase db push` (needed a fresh
+personal access token — the one from the previous entry was revoked
+right after that migration, as intended, and using a Supabase access
+token always kills the CLI's login session too, not just future API
+calls, so re-auth was needed here from scratch). Then, against
+production directly: inserted a throwaway member, confirmed its
+`created` log row got `member_id` = its own id; updated it, confirmed
+`updated` got the same; deleted it — **no FK error**, confirming the
+fix — and confirmed the `deleted` row itself has `member_id` NULL by
+design. Separately noticed the earlier `created`/`updated` rows'
+`member_id` also went NULL after the delete — that's the *existing*
+`activity_logs.member_id ... ON DELETE SET NULL` FK clause doing its
+documented job once the referenced member is gone, not a side effect
+of this fix. Deleted the test member + its now-orphaned log rows
+afterward so production stayed at the fresh-start's zero-rows
+baseline. Not click-tested via the Settings/Members UI in the browser
+— verified at the SQL level directly, same as the fresh-start
+migration.
