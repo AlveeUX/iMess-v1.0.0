@@ -444,3 +444,64 @@ plain-admin viewer can't see the role UI) — the SQL-level guarantees
 (RLS policy + trigger, unchanged logic) and the type-check give high
 confidence, but worth a real UI pass next time someone's signed in as
 Alvee.
+
+### 2026-08-16 — Full production data wipe ("fresh start"); found + worked around a latent member-delete bug
+
+**Requested**: Alvee asked to erase all mess bookkeeping data for a
+fresh start, keeping only the `super_admin` account
+(`absaralvee23@gmail.com`) in auth — every other login removed
+entirely. Confirmed scope explicitly before running anything given the
+blast radius: this is prod, no staging, no undo. Landed on: wipe
+Alvee's own `members` row too (not just other members'); leave
+`signup_allowlist` untouched so previously-invited emails can still
+sign back up; delete both other auth accounts
+(`prosenjitsarker22@gmail.com` and `absaralvee7777@gmail.com`, the
+latter unclear whether it was Alvee's own test login or a third
+party's — deleted anyway per explicit final confirmation).
+
+**Mechanism**: no Supabase CLI was linked and no service-role key was
+available locally. `supabase login`'s normal device-code flow needs a
+TTY/browser and fails headless (`LegacyLoginMissingTokenError`).
+Generated a scoped Supabase personal access token instead (1-hour
+expiry, via the dashboard UI since the user was already signed in
+there — `npx supabase login --token`), linked the project, wrote the
+delete as a real migration file (not a one-off dashboard query, per
+the existing "avoid the dashboard SQL editor for anything nontrivial"
+gotcha above), pushed with `supabase db push`, then revoked the token
+immediately after rather than waiting for it to expire.
+
+**What changed**:
+- `supabase/migrations/20260816120000_fresh_start_wipe_data_and_non_super_admin_auth.sql`
+  — deletes every row from `bill_items`, `bills_v2`, `bills`,
+  `correction_requests`, `member_away_periods`, `meals`, `deposits`,
+  `expenses`, `months`, `member_links`, `members`, then
+  `auth.users` for every id except Alvee's (cascades to `profiles` /
+  `user_roles` / Supabase's own `auth.identities` /
+  `auth.sessions` / `auth.refresh_tokens`), then `activity_logs` last
+  — deliberately after everything else, so the delete-triggered log
+  rows from this same migration don't survive either.
+
+**Bug found along the way**: the first push attempt failed —
+`DELETE FROM public.members` hit
+`activity_logs_member_id_fkey` (23503). `trg_log_members`'s AFTER
+DELETE branch (`log_change()`) sets the log row's `member_id` to the
+just-deleted member's own id (`v_member_id := v_entity_id` when
+`TG_TABLE_NAME = 'members'`), and that's a **new INSERT** referencing
+an id that's already gone — the FK's `ON DELETE SET NULL` only
+rewrites *existing* referencing rows, it doesn't help a fresh insert.
+Net effect: **deleting any single member through the app today (the
+"Admin delete members" RLS policy exists and is presumably reachable
+from Settings/Members) would 400 the same way** — this predates this
+migration and isn't fixed by it. Worked around it here by wrapping
+just the `members` delete in
+`ALTER TABLE ... DISABLE/ENABLE TRIGGER trg_log_members`, since we
+were wiping `activity_logs` anyway. The real fix (make `log_change()`
+skip the self-referential log-insert on a `members` DELETE, or insert
+with `member_id := NULL` in that one case) is still open — worth
+doing before anyone next removes a member from the UI.
+
+**Verification**: row counts on every listed table are 0;
+`signup_allowlist` still has its 2 rows; `auth.users` has exactly one
+row (Alvee, role `super_admin`). Not click-tested in the browser (no
+data left to click through) — verified entirely via
+`npx supabase db query --linked` against the live database.
