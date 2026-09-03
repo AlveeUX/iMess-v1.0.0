@@ -13,6 +13,7 @@ import {
   ScrollText,
   MessageSquareWarning,
   Receipt,
+  SprayCan,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export const Layout = () => {
     { to: "/deposits", label: "Deposits", icon: Wallet },
     { to: "/bazar", label: "Bazar", icon: ShoppingBasket, badge: monthData.data?.pendingCount },
     { to: "/bills", label: "Bills", icon: Receipt },
+    { to: "/maid", label: "Maid", icon: SprayCan },
     { to: "/report", label: "Report", icon: FileText },
     { to: "/transparency", label: "Transparency", icon: ScrollText },
     { to: "/corrections", label: "Corrections", icon: MessageSquareWarning, badge: isAdmin ? corrections.data : undefined },

@@ -375,6 +375,83 @@ export type Database = {
         }
         Relationships: []
       }
+      housekeeper: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          monthly_rent: number | null
+          name: string
+          phone: string | null
+          updated_at: string
+          visits_per_day: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_rent?: number | null
+          name: string
+          phone?: string | null
+          updated_at?: string
+          visits_per_day?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_rent?: number | null
+          name?: string
+          phone?: string | null
+          updated_at?: string
+          visits_per_day?: number
+        }
+        Relationships: []
+      }
+      housekeeper_attendance: {
+        Row: {
+          created_at: string
+          date: string
+          housekeeper_id: string
+          id: string
+          marked_by: string | null
+          note: string | null
+          updated_at: string
+          visit_1_present: boolean
+          visit_2_present: boolean
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          housekeeper_id: string
+          id?: string
+          marked_by?: string | null
+          note?: string | null
+          updated_at?: string
+          visit_1_present?: boolean
+          visit_2_present?: boolean
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          housekeeper_id?: string
+          id?: string
+          marked_by?: string | null
+          note?: string | null
+          updated_at?: string
+          visit_1_present?: boolean
+          visit_2_present?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "housekeeper_attendance_housekeeper_id_fkey"
+            columns: ["housekeeper_id"]
+            isOneToOne: false
+            referencedRelation: "housekeeper"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meals: {
         Row: {
           created_at: string

@@ -17,6 +17,7 @@ import Settings from "./pages/Settings";
 import Bazar from "./pages/Bazar";
 import BazarMemberProfile from "./pages/BazarMemberProfile";
 import Bills from "./pages/Bills";
+import Maid from "./pages/Maid";
 import Transparency from "./pages/Transparency";
 import Corrections from "./pages/Corrections";
 import NotFound from "./pages/NotFound.tsx";
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/bazar" element={<Bazar />} />
               <Route path="/bazar/member/:memberId" element={<BazarMemberProfile />} />
               <Route path="/bills" element={<Bills />} />
+              <Route path="/maid" element={<Maid />} />
               <Route path="/report" element={<Report />} />
               <Route path="/transparency" element={<Transparency />} />
               <Route path="/corrections" element={<Corrections />} />

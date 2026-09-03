@@ -2,6 +2,12 @@
 
 Updates shown to everyone in the app, newest first. Add new entries directly below this line.
 
+## September 3, 2026
+
+- **New: Maid page.** Track the maid's profile and daily attendance from the sidebar — visible to everyone, editable by admins.
+- **Per-visit cost is now automatic.** No more typing in a per-visit rate — it's calculated from monthly rent ÷ (visits per day × days in the month), so it's always right.
+- **Payable Amount card.** See what's owed so far this month, plus a live projection for the full month, right on the Maid page.
+
 ## August 12, 2026
 
 - **Simpler roles.** Removed the unused "Bazar Contributor" role — bazar submission has always been open to every member anyway. Only Member, Admin, and Super Admin remain.

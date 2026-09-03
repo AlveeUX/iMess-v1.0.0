@@ -178,9 +178,17 @@ A member-initiated request queue for anything they can't fix themselves. Meal ch
 - Month close / reopen control (admin-only), with a live-rate preview before committing.
 - Signup allowlist management (admin-only) — the same list the signup Edge Function checks against.
 
+### 5.12 Maid — `/maid`
+
+- Tracks the mess's maid: a profile plus a daily attendance calendar. Visible to every signed-in member; only admin/super_admin can edit anything — enforced at the RLS level, not just hidden in the UI.
+- **Profile card**: name, phone (tap-to-call), monthly rent, visits per day, active/inactive toggle. There is no manually-entered "per visit" rate — it's always calculated as `monthly_rent ÷ (visits_per_day × days_in_month)`, so it's automatically correct for any month without a rent-history mechanism.
+- **Attendance calendar**: the same compact month-grid pattern as Meals. Each day shows two visit indicators (present/absent) and that day's calculated cost. Admin taps a day to toggle either visit; the write applies immediately — unlike meals/deposits/bazar, there's no pending/approval step. Non-admins see the identical grid fully read-only, with no tap affordance rendered at all.
+- **Month summary**: total visits present, total visits absent, and total cost for the viewed month.
+- **Payable Amount card**: "Payable so far" (cost through today, or the full month when viewing a past month) and — only while viewing the current, still-open month — a "Projected full month" figure assuming full attendance for the remaining days, plus a caption showing the per-visit math. Read-only and identical for every role; recalculates instantly as attendance is toggled or the profile is edited, no manual refresh.
+
 ## 6. Data model
 
-Thirteen tables in the `public` schema, backing the features above.
+Sixteen tables in the `public` schema, backing the features above.
 
 | Table | Purpose | Key fields |
 |---|---|---|
@@ -198,8 +206,10 @@ Thirteen tables in the `public` schema, backing the features above.
 | `signup_allowlist` | Emails permitted to register | `email, note, created_by` |
 | `activity_logs` | Append-only audit trail | `action, entity_type, actor_email, member_id, diff, month` |
 | `profiles` | Display name per user | `user_id, display_name` |
+| `housekeeper` | The maid's profile | `name, phone, monthly_rent, visits_per_day, is_active` |
+| `housekeeper_attendance` | Daily attendance, per visit | `housekeeper_id, date, visit_1_present, visit_2_present, marked_by` |
 
-Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, `enforce_meal_submission` for the meal pending/approve trigger, and `apply_correction` for the corrections auto-apply path. Thirty versioned SQL migrations under `supabase/migrations` define this schema today.
+Access control is enforced in Postgres via row-level security, backed by helper functions: `has_role`, `is_admin_or_super`, `is_month_closed`, `current_member_id`, `user_owns_bill_item`, `bill_is_utility`, `enforce_meal_submission` for the meal pending/approve trigger, and `apply_correction` for the corrections auto-apply path. Thirty-six versioned SQL migrations under `supabase/migrations` define this schema today.
 
 ## 7. Approval workflows
 
@@ -221,7 +231,7 @@ Every entry that moves money, or that changes what a member is credited for, fol
 
 **Hosting & config.** Deployed on Vercel. Supabase project id, URL, and anon key are supplied via `VITE_`-prefixed env vars; the project id is also pinned in `supabase/config.toml` for the CLI migration workflow.
 
-**Schema management.** Thirty versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
+**Schema management.** Thirty-six versioned SQL migrations under `supabase/migrations` track every schema change from first principles to the current shape.
 
 ## 9. Branding
 

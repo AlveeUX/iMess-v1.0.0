@@ -544,3 +544,157 @@ afterward so production stayed at the fresh-start's zero-rows
 baseline. Not click-tested via the Settings/Members UI in the browser
 — verified at the SQL level directly, same as the fresh-start
 migration.
+
+### 2026-09-03 — Added the Maid (housekeeper) feature: profile, attendance calendar, cost tracking
+
+**Requested**: a new "Maid" feature — a profile (name, phone, monthly
+rent, per-visit rate, visits/day), a Meals-style attendance calendar,
+and a month summary panel — visible to every signed-in member, but
+writable only by admin/super_admin, with **no** approval workflow
+(writes apply immediately, same shape as editing a member's profile).
+Explicit naming split: every user-facing string says "Maid"; every
+internal identifier (table/column/component/hook names) stays
+"housekeeper" for code consistency. Scoped as additive-only — the only
+existing-file touches allowed were the minimal route/nav registration
+lines.
+
+Planned via a written Step-0 plan (patterns to copy, exact migration
+SQL, exact file list) confirmed with the user before any code was
+written, per explicit instruction.
+
+**What changed**:
+- `supabase/migrations/20260903120000_add_housekeeper_maid_attendance.sql`
+  (new) — `housekeeper` and `housekeeper_attendance` tables. RLS:
+  `SELECT` open to `authenticated`; `INSERT`/`UPDATE`/`DELETE` gated on
+  `is_admin_or_super()` — the current canonical role-check helper (not
+  the older `has_role`, which is still used in a few untouched legacy
+  policies but isn't what new code should reach for). Same trigger
+  machinery as every other table: `trg_log_*` → `log_change()` for
+  Transparency (already fully generic — needed zero changes to pick up
+  the new tables), `update_updated_at_column()` for `updated_at`. A
+  small dedicated trigger, `set_housekeeper_attendance_marked_by()`,
+  stamps `marked_by` server-side rather than trusting the client
+  payload — same intent as `member_away_periods.created_by` /
+  `deposits.submitted_by`.
+- `src/hooks/useHousekeeper.ts` (new) — `useHousekeeper()` /
+  `useHousekeeperAttendance()`, the same plain-`useQuery` shape as
+  `useMembers`/`useMonthData` (query key array, no dedicated mutation
+  hooks — this codebase does writes inline in the page component
+  everywhere, e.g. `Meals.tsx`/`Members.tsx`, so `Maid.tsx` follows
+  that instead of inventing a mutation-hook pattern that doesn't exist
+  elsewhere here).
+- `src/pages/Maid.tsx` (new) — profile card (read-only render for
+  members; edit dialog gated behind `isAdmin` for admin/super_admin),
+  a Meals-style compact calendar grid (two small present/absent
+  indicators + that day's calculated cost per cell), month summary
+  tiles. Non-admins render a plain `<div>` cell with zero tap
+  affordance for calendar days — not a disabled `<button>` — per the
+  explicit "not just hidden, not rendered" requirement.
+- `src/App.tsx` / `src/components/Layout.tsx` — one route line and one
+  nav-entry line each (new `SprayCan` icon import), same
+  no-role-gating visibility as the Transparency link.
+- `src/integrations/supabase/types.ts` — hand-added the
+  `housekeeper`/`housekeeper_attendance` Row/Insert/Update blocks.
+  Flagged to the user before doing it: this file is hand-maintained in
+  this repo (no `supabase gen types` step, see Quick orientation
+  above), so every future schema change to these two tables needs the
+  same manual sync or the app typechecks against a stale schema.
+
+**Deviations from the original ask, confirmed with the user first**:
+the codebase has no actual React-Hook-Form usage anywhere despite it
+being an installed dependency (`Members.tsx`, the closest analog to
+the new Add/Edit form, uses plain `useState` + Zod `.safeParse()` on
+submit) — followed that real pattern instead of introducing RHF net-
+new. The theme's actual corner radius is `--radius: 0.75rem` (~12px,
+via `rounded-lg`/`md`/`sm`), not the 4px originally assumed in the
+request — used the real token throughout instead.
+
+**Verification**: `npx tsc --noEmit` clean. `npm run lint` clean on
+every touched/new file (the repo has ~74 pre-existing
+`@typescript-eslint/no-explicit-any` errors scattered across
+`Meals.tsx`/`Members.tsx`/`Deposits.tsx`/etc. that predate this work —
+confirmed those aren't new, and fixed the 3 the same pattern would
+have added in `Maid.tsx` to zero rather than matching the
+pre-existing baseline). `npm run build` succeeds. **Migrations were
+not pushed to production during this session** — pushing is a
+separate, explicit-confirmation step on this no-staging prod database,
+and the user hadn't said "go ahead" on that specific action yet. See
+the next entry for what that caused.
+
+### 2026-09-03 — Maid: per-visit became a calculated value; added a live Payable Amount card; found + explained why the page loaded slowly
+
+**Requested**: two follow-ups to the just-written Maid feature, scoped
+explicitly to Maid-only files (migrations, `Maid.tsx`, the housekeeper
+hooks, the Add/Edit form + schema — "do not touch any other page,
+table, hook, or the Dashboard"): (1) stop storing `per_visit_amount`
+and always calculate it as `monthly_rent ÷ (visits_per_day ×
+days_in_month)`; (2) add a real-time "Payable Amount" card (payable so
+far this month, plus a projected full-month total while the current
+month is still open) built on that same calculation.
+
+**What changed**:
+- `supabase/migrations/20260903130000_drop_housekeeper_per_visit_amount.sql`
+  (new — the original migration file was left untouched, per explicit
+  instruction) — drops `housekeeper.per_visit_amount`.
+- `calculatePerVisitAmount(monthlyRent, visitsPerDay, date)` added to
+  `useHousekeeper.ts` (using date-fns's `getDaysInMonth`, already a
+  project dependency and already used by `Dashboard.tsx`) — placed
+  there rather than in `lib/mess.ts` (home of the other shared
+  formatter, `fmtMoney`) specifically because `lib/mess.ts` is shared
+  by six other pages and wasn't on this task's allowed-touch list;
+  `useHousekeeper.ts` was the one location satisfying both "put it
+  near the currency formatter or the housekeeper hooks" and "touch
+  only Maid-related files." Every consumer — profile card, calendar
+  day cost, month summary, the form's live preview, and the new
+  Payable Amount card — now calls through this one helper; no
+  duplicated formula anywhere.
+- `Maid.tsx` — Add/Edit form's "Per visit" input and its Zod field
+  removed entirely; a live read-only preview line under "Visits per
+  day" recalculates on every keystroke (plain derived JSX from `form`
+  state, no extra state needed). New Payable Amount card added between
+  the month-summary tiles and the calendar, reusing the exact
+  `Card`/icon-box classes already in the file (no new CSS) —
+  identical and read-only for every role, no `isAdmin` gating. It
+  derives its numbers from the same `useHousekeeper`/
+  `useHousekeeperAttendance` query data already powering the calendar,
+  so it updates the instant the existing `qc.invalidateQueries` calls
+  fire on an attendance toggle or a profile save — no new fetch, no
+  manual refresh.
+- `types.ts` — removed `per_visit_amount` from the `housekeeper`
+  Row/Insert/Update blocks (same manual-sync note as the previous
+  entry).
+
+**Bug found while investigating a "why is Maid slow" report**: the
+page always eventually rendered (the empty "No maid profile yet."
+state), just noticeably slower than every other menu item. Read the
+Network panel via browser automation and found `GET
+.../rest/v1/housekeeper` returning **404** — because both migrations
+above (this one and the previous entry's) were still sitting
+local-only. They'd been written and fully verified
+(`tsc`/lint/build) but never actually `supabase db push`-ed to the
+live `rffravoqowkcjtcgimhj` project — pushing had been flagged as a
+separate explicit-confirmation step both times and the user hadn't
+said go-ahead on that specific action until this session.
+`QueryClientProvider` in `App.tsx` uses TanStack Query's un-overridden
+defaults (`retry: 3`, exponential backoff), so every failed
+`housekeeper` fetch retried three times (~1s/2s/4s) before giving up
+and falling through to the empty state — exactly the "not broken, just
+slow" symptom reported. Not a code bug in the Maid feature itself;
+root cause and fix were entirely about deployment state, not logic.
+
+**Verification**: `npx tsc --noEmit`, `npm run lint` (touched files),
+`npm run build` all clean. Hand-verified the formula in isolation:
+৳3000 rent ÷ (2 visits × 30 days) = ৳50/visit; 30 days of full
+attendance sums back to exactly ৳3000 = the input rent, confirming the
+invariant. Confirmed the 404 directly against the live project via the
+browser's Network panel (not guessed from reading code). Both
+migrations above were pushed to production in this same session once
+the user confirmed — see the data-wipe/fix entries above for the
+established push mechanism (fresh personal access token via
+`supabase login --token`, `supabase db push`, revoke after). Post-push
+confirmed via direct query that both tables exist with the intended
+shape and `per_visit_amount` is gone; **not separately click-tested
+end-to-end in the browser this round** (no fresh screenshot taken
+after the push) — verified at the SQL/schema level, same standing gap
+as several earlier entries above where no live UI pass was done in the
+same session as the push.
